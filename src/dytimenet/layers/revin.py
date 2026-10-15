@@ -18,13 +18,16 @@ class RevIN(nn.Module):
         self._mean: Optional[torch.Tensor] = None
         self._std:  Optional[torch.Tensor] = None
 
-    def forward(self, x: torch.Tensor, mode: str = "norm") -> torch.Tensor:
+    def forward(self, x: torch.Tensor, mode: str = "norm", return_stats: bool = False):
+        """return_stats=True (chỉ mode "norm") trả thêm μ, σ đã detach, shape [B, C, 1]."""
         if mode == "norm":
             self._mean = x.mean(dim=-1, keepdim=True).detach()
             self._std  = x.std(dim=-1, keepdim=True, unbiased=False).detach() + self.eps
             x = (x - self._mean) / self._std
             if self.affine:
                 x = x * self.affine_weight[None, :, None] + self.affine_bias[None, :, None]
+            if return_stats:
+                return x, self._mean, self._std
             return x
         elif mode == "denorm":
             if self._mean is None:
