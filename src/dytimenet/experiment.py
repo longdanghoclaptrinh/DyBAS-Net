@@ -17,7 +17,7 @@ import yaml
 
 from .config import config_from_dict
 from .data.dataset import TimeSeriesDataset, get_dataloaders
-from .engine.evaluate import evaluate, print_summary
+from .engine.evaluate import evaluate, expert_usage, print_summary
 from .engine.trainer import EarlyStopping, cosine_lr, run_epoch
 from .models import DyTimeNet
 from .utils.seed import set_seed
@@ -57,8 +57,10 @@ def train(config):
         config.data_path, config.seq_len, config.pred_len, config.batch_size,
         config.num_workers, config.target_cols, config.scale, dataset_name=config.dataset)
     model = DyTimeNet(**config.model_kwargs(num_vars)).to(device)
+    moe_info = (f" | MoE E={config.num_experts} k={config.top_k} {config.moe_dispatch} "
+                f"aux_weight={config.moe_aux_weight}" if config.use_moe else "")
     print(f"DyTimeNet v2 | {config.dataset} | L={config.seq_len} S={config.pred_len} | "
-          f"device={device} | parameters={model.count_parameters():,}")
+          f"device={device} | parameters={model.count_parameters():,}{moe_info}")
     # 3. Tạo thư mục riêng và lưu thông tin để tái lập lần chạy.
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     run_dir = Path(config.save_dir) / f"{config.dataset}_L{config.seq_len}_S{config.pred_len}_seed{config.seed}_{stamp}"
@@ -84,19 +86,29 @@ def train(config):
     early = EarlyStopping(config.patience, config.min_delta, checkpoint_path, metadata)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
+    aux_weight = config.moe_aux_weight if config.use_moe else 0.0
     history = []
     start = time.perf_counter()
     # 5. Mỗi epoch: cập nhật LR → train → validation → lưu checkpoint nếu cải thiện.
     for epoch in range(config.epochs):
         lr = cosine_lr(optimizer, epoch, config.lr, config.epochs, config.warmup_epochs)
-        train_m = run_epoch(model, train_loader, criterion, optimizer, device)
+        epoch_start = time.perf_counter()
+        train_m = run_epoch(model, train_loader, criterion, optimizer, device, aux_weight)
+        train_epoch_seconds = time.perf_counter() - epoch_start
         val_m = run_epoch(model, val_loader, criterion, device=device)
         history.append({"epoch": epoch + 1, "lr": lr,
+                        "train_epoch_seconds": train_epoch_seconds,
+                        "epoch_seconds": time.perf_counter() - epoch_start,
                         **{f"train_{k}": v for k, v in train_m.items()},
                         **{f"val_{k}": v for k, v in val_m.items()}})
         pd.DataFrame(history).to_csv(run_dir / "history.csv", index=False)
+        usage = ""
+        if config.use_moe:
+            usage = " | experts(train)=" + "/".join(
+                f"{train_m[f'expert_{i}']:.2f}" for i in range(config.num_experts))
+            usage += f" | aux={train_m['aux']:.4f}"
         print(f"Epoch {epoch + 1:3}/{config.epochs} | lr={lr:.2e} | "
-              f"train_loss={train_m['loss']:.6f} | val_loss={val_m['loss']:.6f}")
+              f"train_loss={train_m['loss']:.6f} | val_loss={val_m['loss']:.6f}{usage}")
         if early(val_m["loss"], model, epoch + 1):
             print(f"Early stopping at epoch {epoch + 1}.")
             break
@@ -105,10 +117,15 @@ def train(config):
     early.load_best(model)
     metrics = evaluate(model, test_loader, device)
     summary = print_summary(config, metrics, train_seconds)
-    summary.update(best_epoch=early.best_epoch, best_val_loss=early.best_loss,
+    summary.update(best_epoch=early.best_epoch, best_val_loss=early.best_loss, epochs_run=len(history),
+                   mean_epoch_seconds=float(np.mean([h["epoch_seconds"] for h in history])),
                    checkpoint=str(checkpoint_path), data_sha256=metadata["data_sha256"])
+    if config.use_moe:
+        summary["test_expert_fractions"] = expert_usage(model, test_loader, device)
+        print("Test expert usage: " + "/".join(f"{f:.3f}" for f in summary["test_expert_fractions"]))
     write_json(run_dir / "metrics.json", summary)
-    pd.DataFrame([summary]).to_csv(run_dir / "metrics.csv", index=False)
+    pd.DataFrame([{k: v for k, v in summary.items() if not isinstance(v, list)}]).to_csv(
+        run_dir / "metrics.csv", index=False)
     print(f"Checkpoint: {checkpoint_path}")
     return checkpoint_path, summary
 

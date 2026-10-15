@@ -26,7 +26,8 @@ class DyTimeNet(nn.Module):
                  p1: float = 0.5, p2: float = 0.5,
                  ffn_ratio: float = 2.0, hidden_ratio: float = 0.75,
                  dropout: float = 0.1, affine_revin: bool = True,
-                 decomp_kernel: int = 25):
+                 decomp_kernel: int = 25, use_moe: bool = False,
+                 num_experts: int = 4, top_k: int = 1, moe_dispatch: str = "sparse"):
         super().__init__()
         assert d_model < seq_len, (
             f"d_model ({d_model}) phải < seq_len ({seq_len}) để downsampling."
@@ -37,6 +38,7 @@ class DyTimeNet(nn.Module):
         self.pred_len   = pred_len
         self.d_model    = d_model
         self.num_layers = num_layers
+        self.use_moe    = use_moe
 
         # ── RevIN ────────────────────────────────────────────────────────
         self.revin = RevIN(num_vars, affine=affine_revin)
@@ -60,7 +62,7 @@ class DyTimeNet(nn.Module):
             CrossVBlock(num_vars, d_model, p1, p2, hidden_ratio)
             for _ in range(num_layers)])
         self.intra_v_blocks = nn.ModuleList([
-            IntraVBlock(d_model, ffn_ratio, dropout)
+            IntraVBlock(d_model, ffn_ratio, dropout, use_moe, num_experts, top_k, moe_dispatch)
             for _ in range(num_layers)])
 
         # ── Projection heads ──────────────────────────────────────────────
@@ -79,8 +81,13 @@ class DyTimeNet(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x : [B, C, L] → [B, C, S]"""
 
-        # 1. Chuẩn hóa đầu vào
-        x = self.revin(x, "norm")                          # [B, C, L]
+        # 1. Chuẩn hóa đầu vào (MoE: giữ μ, σ của input gốc làm đặc trưng cho router)
+        if self.use_moe:
+            x, mu, sigma = self.revin(x, "norm", return_stats=True)
+            log_sigma = sigma.log()                         # mu, log_sigma: [B, C, 1]
+        else:
+            x = self.revin(x, "norm")                      # [B, C, L]
+            mu = log_sigma = None
 
         # 2. Tách trend và seasonal
         x_seasonal, x_trend = self.decomp(x)              # mỗi cái [B, C, L]
@@ -98,7 +105,7 @@ class DyTimeNet(nn.Module):
         for cross_v, intra_v in zip(self.cross_v_blocks, self.intra_v_blocks):
             # Preserve the notebook's outer residual in addition to CrossV's inner one.
             s = cross_v(s) + s
-            s = intra_v(s)
+            s = intra_v(s, mu, log_sigma)
 
         seasonal_out = self.projection(s)                  # [B, C, S]
 
@@ -108,6 +115,16 @@ class DyTimeNet(nn.Module):
         # 4. Khôi phục thang đo gốc
         out = self.revin(out, "denorm")
         return out
+
+    def moe_aux_loss(self):
+        """Tổng load-balance loss của các IntraVMoE trong forward train gần nhất (None nếu không có)."""
+        losses = [b.moe.aux_loss for b in self.intra_v_blocks if b.use_moe and b.moe.aux_loss is not None]
+        return sum(losses) if losses else None
+
+    def moe_expert_counts(self):
+        """Số lượt gán token → expert của forward gần nhất, cộng qua các layer ([E] hoặc None)."""
+        counts = [b.moe.expert_counts for b in self.intra_v_blocks if b.use_moe]
+        return sum(counts) if counts else None
 
     def count_parameters(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)

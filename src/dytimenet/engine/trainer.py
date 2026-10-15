@@ -56,17 +56,29 @@ def cosine_lr(optimizer, epoch, lr_init, total_epochs, warmup_epochs=2):
     return lr
 
 
-def run_epoch(model, loader, criterion, optimizer=None, device="cpu"):
-    """Train/evaluate with sample-weighted MSE/MAE and gradient norm clipping at 1."""
+def run_epoch(model, loader, criterion, optimizer=None, device="cpu", aux_weight=0.0):
+    """Train/evaluate with sample-weighted MSE/MAE and gradient norm clipping at 1.
+
+    Model MoE: khi train, loss = criterion + aux_weight·aux (validation/test chỉ là criterion);
+    trả thêm "aux" và "expert_i" = tỉ lệ lượt gán token vào expert i trong epoch.
+    """
     is_train = optimizer is not None
     model.train(is_train)
-    total_loss = total_mse = total_mae = 0.0
+    total_loss = total_mse = total_mae = total_aux = 0.0
     n = 0
+    expert_counts = None
     with torch.set_grad_enabled(is_train):
         for bx, by in loader:
             bx, by = bx.to(device), by.to(device)
             out = model(bx)
             loss = criterion(out, by)
+            aux = model.moe_aux_loss() if hasattr(model, "moe_aux_loss") else None
+            if is_train and aux is not None:
+                total_aux += aux.item() * bx.size(0)
+                loss = loss + aux_weight * aux
+            counts = model.moe_expert_counts() if hasattr(model, "moe_expert_counts") else None
+            if counts is not None:
+                expert_counts = counts.cpu() if expert_counts is None else expert_counts + counts.cpu()
             if not torch.isfinite(loss):
                 raise ValueError("Non-finite loss encountered; check data and hyperparameters")
             if is_train:
@@ -81,4 +93,10 @@ def run_epoch(model, loader, criterion, optimizer=None, device="cpu"):
             n += bs
     if n == 0:
         raise ValueError("DataLoader produced no batches; check split sizes and batch_size")
-    return {"loss": total_loss / n, "mse": total_mse / n, "mae": total_mae / n}
+    metrics = {"loss": total_loss / n, "mse": total_mse / n, "mae": total_mae / n}
+    if expert_counts is not None:
+        if is_train:
+            metrics["aux"] = total_aux / n
+        fractions = expert_counts.double() / expert_counts.sum()
+        metrics.update({f"expert_{i}": f.item() for i, f in enumerate(fractions)})
+    return metrics

@@ -38,6 +38,12 @@ class ExperimentConfig:
     target_cols: list[str] | None = None
     num_workers: int = 0
     device: str = "auto"
+    # MoE top-k trong IntraVBlock; tắt mặc định để bản gốc chạy y như cũ.
+    use_moe: bool = False
+    num_experts: int = 4
+    top_k: int = 1
+    moe_aux_weight: float = 0.01
+    moe_dispatch: str = "sparse"
 
     def validate(self):
         """Reject invalid settings before reading data or creating a checkpoint."""
@@ -70,7 +76,18 @@ class ExperimentConfig:
             raise ValueError("lr must be positive; weight_decay and min_delta cannot be negative")
         if self.ffn_ratio <= 0 or int(self.d_model * self.ffn_ratio) < 1 or self.hidden_ratio <= 0:
             raise ValueError("ffn_ratio and hidden_ratio must produce positive hidden dimensions")
-        for name in ("scale", "affine_revin"):
+        for name in ("num_experts", "top_k"):
+            value = getattr(self, name)
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+        if self.top_k > self.num_experts:
+            raise ValueError("top_k cannot exceed num_experts")
+        if (isinstance(self.moe_aux_weight, bool) or not isinstance(self.moe_aux_weight, (int, float))
+                or not math.isfinite(self.moe_aux_weight) or self.moe_aux_weight < 0):
+            raise ValueError("moe_aux_weight must be a finite non-negative number")
+        if self.moe_dispatch not in ("dense", "sparse"):
+            raise ValueError("moe_dispatch must be dense or sparse")
+        for name in ("scale", "affine_revin", "use_moe"):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f"{name} must be a boolean")
         for name in ("data_path", "save_dir"):
@@ -88,7 +105,8 @@ class ExperimentConfig:
     def model_kwargs(self, num_vars):
         """All constructor arguments needed to rebuild the exact architecture."""
         names = ("seq_len", "pred_len", "d_model", "num_layers", "p1", "p2",
-                 "ffn_ratio", "hidden_ratio", "dropout", "affine_revin", "decomp_kernel")
+                 "ffn_ratio", "hidden_ratio", "dropout", "affine_revin", "decomp_kernel",
+                 "use_moe", "num_experts", "top_k", "moe_dispatch")
         return {"num_vars": num_vars, **{name: getattr(self, name) for name in names}}
 
     def to_dict(self):
@@ -125,6 +143,8 @@ def training_parser():
         value = getattr(defaults, name)
         if name == "target_cols":
             parser.add_argument("--target_cols", nargs="+", default=None)
+        elif name == "moe_dispatch":
+            parser.add_argument("--moe_dispatch", choices=("dense", "sparse"), default=None)
         elif isinstance(value, bool):
             parser.add_argument(f"--{name}", action=argparse.BooleanOptionalAction, default=None)
         else:
