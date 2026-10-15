@@ -1,0 +1,23 @@
+# Optional editable installation of the src package: pip install -e . --no-deps
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dytimenet"
+version = "0.1.0"
+description = "DyTimeNet v2 multivariate forecasting, refactored from the project notebook"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

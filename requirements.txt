@@ -1,0 +1,7 @@
+# Runtime versions verified locally on Python 3.13 / CPU.
+# For GPU, select the corresponding torch wheel from https://pytorch.org/get-started/previous-versions/
+torch==2.6.0
+numpy==2.1.2
+pandas==2.3.3
+scikit-learn==1.7.2
+PyYAML==6.0.2
