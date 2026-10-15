@@ -1,0 +1,7 @@
+# Shared defaults: src/dytimenet/config.py; explicit CLI arguments override these values.
+dataset: Weather
+data_path: data/weather.csv
+d_model: 64
+batch_size: 64
+p1: 0.1
+p2: 0.1

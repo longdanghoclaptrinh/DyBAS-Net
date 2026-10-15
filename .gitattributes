@@ -1,0 +1,7 @@
+# Keep text diffs consistent across Windows, Linux and macOS.
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.txt text eol=lf
