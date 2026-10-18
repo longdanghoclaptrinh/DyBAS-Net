@@ -26,7 +26,7 @@ class DyTimeNet(nn.Module):
                  p1: float = 0.5, p2: float = 0.5,
                  ffn_ratio: float = 2.0, hidden_ratio: float = 0.75,
                  dropout: float = 0.1, affine_revin: bool = True,
-                 decomp_kernel: int = 25):
+                 decomp_kernel: int = 25, cross_residual: str = "double"):
         super().__init__()
         assert d_model < seq_len, (
             f"d_model ({d_model}) phải < seq_len ({seq_len}) để downsampling."
@@ -37,6 +37,11 @@ class DyTimeNet(nn.Module):
         self.pred_len   = pred_len
         self.d_model    = d_model
         self.num_layers = num_layers
+        # "double": cross_v(s) + s như notebook (2s + f(LN s)); "single": s + f(LN s) (Fig. 5 paper);
+        # "norm": LN(s) + f(LN s) (eq. 2.14 đồ án, eq. 25 paper).
+        if cross_residual not in ("double", "single", "norm"):
+            raise ValueError("cross_residual must be double, single, or norm")
+        self.cross_residual = cross_residual
 
         # ── RevIN ────────────────────────────────────────────────────────
         self.revin = RevIN(num_vars, affine=affine_revin)
@@ -57,7 +62,8 @@ class DyTimeNet(nn.Module):
 
         # ── Cross-Variable & Intra-Variable Blocks ────────────────────────
         self.cross_v_blocks = nn.ModuleList([
-            CrossVBlock(num_vars, d_model, p1, p2, hidden_ratio)
+            CrossVBlock(num_vars, d_model, p1, p2, hidden_ratio,
+                        residual_from_norm=cross_residual == "norm")
             for _ in range(num_layers)])
         self.intra_v_blocks = nn.ModuleList([
             IntraVBlock(d_model, ffn_ratio, dropout)
@@ -96,8 +102,8 @@ class DyTimeNet(nn.Module):
 
         # CrossV + IntraV blocks
         for cross_v, intra_v in zip(self.cross_v_blocks, self.intra_v_blocks):
-            # Preserve the notebook's outer residual in addition to CrossV's inner one.
-            s = cross_v(s) + s
+            # "double" giữ residual ngoài của notebook, cộng thêm vào residual bên trong CrossV.
+            s = cross_v(s) + s if self.cross_residual == "double" else cross_v(s)
             s = intra_v(s)
 
         seasonal_out = self.projection(s)                  # [B, C, S]
