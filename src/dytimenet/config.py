@@ -38,6 +38,7 @@ class ExperimentConfig:
     target_cols: list[str] | None = None
     num_workers: int = 0
     device: str = "auto"
+    cross_residual: str = "double"
 
     def validate(self):
         """Reject invalid settings before reading data or creating a checkpoint."""
@@ -76,6 +77,8 @@ class ExperimentConfig:
         for name in ("data_path", "save_dir"):
             if not isinstance(getattr(self, name), str) or not getattr(self, name).strip():
                 raise ValueError(f"{name} must be a non-empty path string")
+        if self.cross_residual not in ("double", "single", "norm"):
+            raise ValueError("cross_residual must be double, single, or norm")
         if self.device not in ("auto", "cpu", "cuda"):
             raise ValueError("device must be auto, cpu, or cuda")
         if self.target_cols is not None:
@@ -88,7 +91,8 @@ class ExperimentConfig:
     def model_kwargs(self, num_vars):
         """All constructor arguments needed to rebuild the exact architecture."""
         names = ("seq_len", "pred_len", "d_model", "num_layers", "p1", "p2",
-                 "ffn_ratio", "hidden_ratio", "dropout", "affine_revin", "decomp_kernel")
+                 "ffn_ratio", "hidden_ratio", "dropout", "affine_revin", "decomp_kernel",
+                 "cross_residual")
         return {"num_vars": num_vars, **{name: getattr(self, name) for name in names}}
 
     def to_dict(self):
@@ -125,6 +129,8 @@ def training_parser():
         value = getattr(defaults, name)
         if name == "target_cols":
             parser.add_argument("--target_cols", nargs="+", default=None)
+        elif name == "cross_residual":
+            parser.add_argument("--cross_residual", choices=("double", "single", "norm"), default=None)
         elif isinstance(value, bool):
             parser.add_argument(f"--{name}", action=argparse.BooleanOptionalAction, default=None)
         else:
