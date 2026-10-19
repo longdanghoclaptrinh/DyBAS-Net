@@ -81,7 +81,9 @@ class FoldedDyTimeNet(nn.Module):
         self.register_buffer("inv_g", f32(inv_g)[None, :, None])                   # [1, C, 1]
         self.register_buffer("out_bias", f32(bp[None] + c)[None])                  # [1, C, S] khi fold_trend
         # Tham số giữ nguyên từ mô hình gốc (dùng khi chưa gộp hoặc cho phần phi tuyến).
-        self.rev_gamma, self.rev_beta, self.rev_affine = rev.affine_weight, rev.affine_bias, rev.affine
+        self.rev_affine = rev.affine
+        self.rev_gamma = rev.affine_weight if rev.affine else None
+        self.rev_beta = rev.affine_bias if rev.affine else None
         self.decomp, self.temporal_conv, self.trend_proj = model.decomp, model.temporal_conv, model.trend_proj
         self.enc_w, self.enc_b = model.temporal_proj.weight, model.temporal_proj.bias
         cv, iv = model.cross_v_blocks[0], model.intra_v_blocks[0]
