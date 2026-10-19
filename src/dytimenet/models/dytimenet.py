@@ -6,6 +6,7 @@ from dytimenet.layers.revin import RevIN
 from dytimenet.layers.cross_v_block import CrossVBlock
 from dytimenet.layers.intra_v_block import IntraVBlock
 from dytimenet.layers.decomposition import MovingAvg
+from dytimenet.layers.recurrent_cycle import RecurrentCycle
 
 
 class DyTimeNet(nn.Module):
@@ -26,7 +27,7 @@ class DyTimeNet(nn.Module):
                  p1: float = 0.5, p2: float = 0.5,
                  ffn_ratio: float = 2.0, hidden_ratio: float = 0.75,
                  dropout: float = 0.1, affine_revin: bool = True,
-                 decomp_kernel: int = 25, cross_residual: str = "double"):
+                 decomp_kernel: int = 25, cross_residual: str = "double", cycle_len: int = 0):
         super().__init__()
         assert d_model < seq_len, (
             f"d_model ({d_model}) phải < seq_len ({seq_len}) để downsampling."
@@ -42,6 +43,11 @@ class DyTimeNet(nn.Module):
         if cross_residual not in ("double", "single", "norm"):
             raise ValueError("cross_residual must be double, single, or norm")
         self.cross_residual = cross_residual
+        # cycle_len > 0: RCF thay MovingAvg. Phần dư r = z − chu kỳ đi vào cả nhánh tuyến tính
+        # (trend_proj) lẫn nhánh phi tuyến; chu kỳ của tương lai được cộng lại trước inverse RevIN.
+        self.cycle_len = cycle_len
+        if cycle_len:
+            self.cycle = RecurrentCycle(cycle_len, num_vars)
 
         # ── RevIN ────────────────────────────────────────────────────────
         self.revin = RevIN(num_vars, affine=affine_revin)
@@ -82,14 +88,19 @@ class DyTimeNet(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """x : [B, C, L] → [B, C, S]"""
+    def forward(self, x: torch.Tensor, cycle_index: torch.Tensor = None) -> torch.Tensor:
+        """x : [B, C, L] → [B, C, S]; cycle_index [B] chỉ cần khi cycle_len > 0."""
 
         # 1. Chuẩn hóa đầu vào
         x = self.revin(x, "norm")                          # [B, C, L]
 
-        # 2. Tách trend và seasonal
-        x_seasonal, x_trend = self.decomp(x)              # mỗi cái [B, C, L]
+        # 2. Tách trend và seasonal (MovingAvg), hoặc trừ chu kỳ học được (RCF)
+        if self.cycle_len:
+            if cycle_index is None:
+                raise ValueError("cycle_len > 0 cần cycle_index")
+            x_seasonal = x_trend = x - self.cycle(cycle_index, self.seq_len)
+        else:
+            x_seasonal, x_trend = self.decomp(x)          # mỗi cái [B, C, L]
 
         # ── Nhánh Trend: Linear đơn giản ─────────────────────────────────
         trend_out = self.trend_proj(x_trend)               # [B, C, S]
@@ -110,6 +121,8 @@ class DyTimeNet(nn.Module):
 
         # 3. Cộng 2 nhánh TRƯỚC khi denorm (cùng thang chuẩn hóa)
         out = seasonal_out + trend_out                     # [B, C, S]
+        if self.cycle_len:
+            out = out + self.cycle((cycle_index + self.seq_len) % self.cycle_len, self.pred_len)
 
         # 4. Khôi phục thang đo gốc
         out = self.revin(out, "denorm")

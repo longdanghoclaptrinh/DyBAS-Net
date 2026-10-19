@@ -63,9 +63,10 @@ def run_epoch(model, loader, criterion, optimizer=None, device="cpu"):
     total_loss = total_mse = total_mae = 0.0
     n = 0
     with torch.set_grad_enabled(is_train):
-        for bx, by in loader:
+        for batch in loader:
+            bx, by, *extra = batch      # extra = [pha chu kỳ] khi dùng RCF
             bx, by = bx.to(device), by.to(device)
-            out = model(bx)
+            out = model(bx, *[e.to(device) for e in extra])
             loss = criterion(out, by)
             if not torch.isfinite(loss):
                 raise ValueError("Non-finite loss encountered; check data and hyperparameters")

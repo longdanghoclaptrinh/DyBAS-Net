@@ -43,3 +43,25 @@ def test_linear_baselines_build_from_config(name):
     out = model(torch.randn(2, 7, 96))
     assert out.shape == (2, 7, 96)
     out.square().mean().backward()
+
+
+@pytest.mark.parametrize("affine", [True, False])
+def test_fold_matches_original_with_rcf(affine):
+    set_seed(0)
+    model = DyTimeNet(7, 96, 192, d_model=32, cross_residual="norm", cycle_len=24, affine_revin=affine).eval()
+    with torch.no_grad():
+        model.cycle.data.normal_()
+        if affine:
+            model.revin.affine_weight.uniform_(0.5, 1.5)
+            model.revin.affine_bias.normal_()
+        x = torch.randn(8, 7, 96) * 3 + 5
+        idx = torch.randint(0, 24, (8,))
+        torch.testing.assert_close(fold(model)(x, idx), model(x, idx), rtol=1e-5, atol=5e-5)
+
+
+def test_rcf_dataset_phase_and_cyclelinear():
+    config = load_config("configs/ETTh1.yaml", {"pred_len": 96, "model": "rlinear", "cycle_len": 24,
+                                                 "affine_revin": False})
+    model = build_model(config.model, **config.model_kwargs(7))
+    out = model(torch.randn(3, 7, 96), torch.tensor([0, 5, 23]))
+    assert out.shape == (3, 7, 96)

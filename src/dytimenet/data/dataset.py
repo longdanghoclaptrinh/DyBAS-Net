@@ -28,12 +28,13 @@ class TimeSeriesDataset(Dataset):
     """Forecast every selected numeric variable as contiguous [C, L] / [C, S] tensors."""
 
     def __init__(self, data_path, seq_len, pred_len, split="train", target_cols=None,
-                 scale=True, dataset_name=None, scaler_state=None, expected_columns=None):
+                 scale=True, dataset_name=None, scaler_state=None, expected_columns=None, cycle_len=0):
         if split not in ("train", "val", "test"):
             raise ValueError("split must be train, val, or test")
         if seq_len <= 0 or pred_len <= 0:
             raise ValueError("seq_len and pred_len must be positive")
         self.seq_len, self.pred_len, self.scale = seq_len, pred_len, scale
+        self.cycle_len = cycle_len   # > 0: trả thêm pha chu kỳ (chỉ số dòng toàn cục mod cycle_len) cho RCF
         if not Path(data_path).is_file():
             raise FileNotFoundError(f"CSV not found: {data_path}. See data/README.md or use --data_path.")
         df = pd.read_csv(data_path)
@@ -89,6 +90,8 @@ class TimeSeriesDataset(Dataset):
             raise IndexError(idx)
         x = self.data[idx:idx + self.seq_len]
         y = self.data[idx + self.seq_len:idx + self.seq_len + self.pred_len]
+        if self.cycle_len:
+            return x.T.contiguous(), y.T.contiguous(), (self.start + idx) % self.cycle_len
         return x.T.contiguous(), y.T.contiguous()
 
     @property
@@ -106,12 +109,12 @@ class TimeSeriesDataset(Dataset):
 
 
 def get_dataloaders(data_path, seq_len, pred_len, batch_size=32, num_workers=0,
-                    target_cols=None, scale=True, verbose=True, dataset_name=None):
+                    target_cols=None, scale=True, verbose=True, dataset_name=None, cycle_len=0):
     """Preserve shuffled/drop-last training and complete ordered validation/test."""
     if batch_size <= 0 or num_workers < 0:
         raise ValueError("batch_size must be positive and num_workers non-negative")
     kwargs = dict(data_path=data_path, seq_len=seq_len, pred_len=pred_len,
-                  target_cols=target_cols, scale=scale, dataset_name=dataset_name)
+                  target_cols=target_cols, scale=scale, dataset_name=dataset_name, cycle_len=cycle_len)
     train_ds = TimeSeriesDataset(**kwargs, split="train")
     val_ds = TimeSeriesDataset(**kwargs, split="val", scaler_state=train_ds.scaler_state())
     test_ds = TimeSeriesDataset(**kwargs, split="test", scaler_state=train_ds.scaler_state())
