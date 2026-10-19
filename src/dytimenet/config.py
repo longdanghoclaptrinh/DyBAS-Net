@@ -39,6 +39,7 @@ class ExperimentConfig:
     num_workers: int = 0
     device: str = "auto"
     cross_residual: str = "double"
+    model: str = "dytimenet"
 
     def validate(self):
         """Reject invalid settings before reading data or creating a checkpoint."""
@@ -77,6 +78,8 @@ class ExperimentConfig:
         for name in ("data_path", "save_dir"):
             if not isinstance(getattr(self, name), str) or not getattr(self, name).strip():
                 raise ValueError(f"{name} must be a non-empty path string")
+        if self.model not in ("dytimenet", "rlinear", "dlinear"):
+            raise ValueError("model must be dytimenet, rlinear, or dlinear")
         if self.cross_residual not in ("double", "single", "norm"):
             raise ValueError("cross_residual must be double, single, or norm")
         if self.device not in ("auto", "cpu", "cuda"):
@@ -129,6 +132,8 @@ def training_parser():
         value = getattr(defaults, name)
         if name == "target_cols":
             parser.add_argument("--target_cols", nargs="+", default=None)
+        elif name == "model":
+            parser.add_argument("--model", choices=("dytimenet", "rlinear", "dlinear"), default=None)
         elif name == "cross_residual":
             parser.add_argument("--cross_residual", choices=("double", "single", "norm"), default=None)
         elif isinstance(value, bool):

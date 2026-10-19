@@ -19,7 +19,7 @@ from .config import config_from_dict
 from .data.dataset import TimeSeriesDataset, get_dataloaders
 from .engine.evaluate import evaluate, print_summary
 from .engine.trainer import EarlyStopping, cosine_lr, run_epoch
-from .models import DyTimeNet
+from .models import build_model
 from .utils.seed import set_seed
 
 
@@ -56,8 +56,8 @@ def train(config):
     train_loader, val_loader, test_loader, num_vars = get_dataloaders(
         config.data_path, config.seq_len, config.pred_len, config.batch_size,
         config.num_workers, config.target_cols, config.scale, dataset_name=config.dataset)
-    model = DyTimeNet(**config.model_kwargs(num_vars)).to(device)
-    print(f"DyTimeNet v2 | {config.dataset} | L={config.seq_len} S={config.pred_len} | "
+    model = build_model(config.model, **config.model_kwargs(num_vars)).to(device)
+    print(f"{config.model} | {config.dataset} | L={config.seq_len} S={config.pred_len} | "
           f"device={device} | parameters={model.count_parameters():,}")
     # 3. Tạo thư mục riêng và lưu thông tin để tái lập lần chạy.
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -141,7 +141,7 @@ def evaluate_checkpoint(checkpoint_path, data_path=None, batch_size=None, device
         raise ValueError("Dataset split counts differ from the checkpoint")
     loader = DataLoader(dataset, batch_size=config.batch_size, num_workers=config.num_workers,
                         shuffle=False, drop_last=False)
-    model = DyTimeNet(**checkpoint["model_kwargs"]).to(resolved)
+    model = build_model(config.model, **checkpoint["model_kwargs"]).to(resolved)
     model.load_state_dict(checkpoint["model_state_dict"])
     summary = print_summary(config, evaluate(model, loader, resolved))
     summary.update(checkpoint=str(checkpoint_path), best_epoch=checkpoint["best_epoch"],

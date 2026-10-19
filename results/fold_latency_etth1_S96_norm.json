@@ -1,0 +1,265 @@
+{
+ "checkpoint": "checkpoints/residual_ablation/ETTh1_L96_S96_seed2021_20261018T131931801543Z/best.pt",
+ "model_kwargs": {
+  "num_vars": 7,
+  "seq_len": 96,
+  "pred_len": 96,
+  "d_model": 64,
+  "num_layers": 1,
+  "p1": 0.1,
+  "p2": 0.1,
+  "ffn_ratio": 2.0,
+  "hidden_ratio": 0.75,
+  "dropout": 0.1,
+  "affine_revin": true,
+  "decomp_kernel": 25,
+  "cross_residual": "norm"
+ },
+ "cpu": "AMD64 Family 25 Model 116 Stepping 1, AuthenticAMD",
+ "torch": "2.6.0+cpu",
+ "warmup": 50,
+ "reps": 300,
+ "rounds": 5,
+ "timings": {
+  "eager | b1/t8 | (a) gốc": {
+   "median_ms": 0.42594999831635505,
+   "min_ms": 0.396850002289284,
+   "max_ms": 0.5121499998494983,
+   "p90_ms": 0.5699999965145253
+  },
+  "torchscript | b1/t8 | (a) gốc": {
+   "median_ms": 0.261799999861978,
+   "min_ms": 0.25985000320360996,
+   "max_ms": 0.32780000037746504,
+   "p90_ms": 0.3479000006336719
+  },
+  "eager | b1/t8 | (a') viết lại dạng hàm, chưa gộp": {
+   "median_ms": 0.34809999851859175,
+   "min_ms": 0.34684999991441146,
+   "max_ms": 0.3603999975894112,
+   "p90_ms": 0.44039999920642003
+  },
+  "torchscript | b1/t8 | (a') viết lại dạng hàm, chưa gộp": {
+   "median_ms": 0.2721999990171753,
+   "min_ms": 0.2668000015546568,
+   "max_ms": 0.3148499999952037,
+   "p90_ms": 0.35599999682744965
+  },
+  "eager | b1/t8 | (b) + gộp trend & inverse RevIN (K)": {
+   "median_ms": 0.37539999902946874,
+   "min_ms": 0.36404999991646037,
+   "max_ms": 0.4516000008152332,
+   "p90_ms": 0.4791999963345006
+  },
+  "torchscript | b1/t8 | (b) + gộp trend & inverse RevIN (K)": {
+   "median_ms": 0.28315000236034393,
+   "min_ms": 0.28139999994891696,
+   "max_ms": 0.33989999792538583,
+   "p90_ms": 0.36920000275131315
+  },
+  "eager | b1/t8 | (c) + gộp RevIN-norm, MovingAvg, Conv (M)": {
+   "median_ms": 0.2282999994349666,
+   "min_ms": 0.22290000197244808,
+   "max_ms": 0.26435000108904205,
+   "p90_ms": 0.3036999987671152
+  },
+  "torchscript | b1/t8 | (c) + gộp RevIN-norm, MovingAvg, Conv (M)": {
+   "median_ms": 0.18995000209542923,
+   "min_ms": 0.180200000613695,
+   "max_ms": 0.221800000872463,
+   "p90_ms": 0.2367999986745417
+  },
+  "eager | b1/t8 | (d) + ghép [M; K] thành 1 einsum": {
+   "median_ms": 0.22294999871519394,
+   "min_ms": 0.2162000018870458,
+   "max_ms": 0.265950002358295,
+   "p90_ms": 0.2939000041806139
+  },
+  "torchscript | b1/t8 | (d) + ghép [M; K] thành 1 einsum": {
+   "median_ms": 0.1720000000204891,
+   "min_ms": 0.16774999676272273,
+   "max_ms": 0.2121500001521781,
+   "p90_ms": 0.24400000256719068
+  },
+  "eager | b64/t8 | (a) gốc": {
+   "median_ms": 1.4036499960639048,
+   "min_ms": 1.2903999995614868,
+   "max_ms": 1.4303499992820434,
+   "p90_ms": 1.5827000024728477
+  },
+  "torchscript | b64/t8 | (a) gốc": {
+   "median_ms": 1.1182999987795483,
+   "min_ms": 1.0665499976312276,
+   "max_ms": 1.1650999949779361,
+   "p90_ms": 1.2481999947340228
+  },
+  "eager | b64/t8 | (a') viết lại dạng hàm, chưa gộp": {
+   "median_ms": 1.415199996699812,
+   "min_ms": 1.3060500023129862,
+   "max_ms": 1.4369499986059964,
+   "p90_ms": 1.586500002304092
+  },
+  "torchscript | b64/t8 | (a') viết lại dạng hàm, chưa gộp": {
+   "median_ms": 1.2260000039532315,
+   "min_ms": 1.1275500000920147,
+   "max_ms": 1.236050004081335,
+   "p90_ms": 1.3032999995630234
+  },
+  "eager | b64/t8 | (b) + gộp trend & inverse RevIN (K)": {
+   "median_ms": 1.3435999971989077,
+   "min_ms": 1.2932500030728988,
+   "max_ms": 1.471049999963725,
+   "p90_ms": 1.549900000100024
+  },
+  "torchscript | b64/t8 | (b) + gộp trend & inverse RevIN (K)": {
+   "median_ms": 1.1497500017867424,
+   "min_ms": 1.1201000015717,
+   "max_ms": 1.2329499986662995,
+   "p90_ms": 1.3151000021025538
+  },
+  "eager | b64/t8 | (c) + gộp RevIN-norm, MovingAvg, Conv (M)": {
+   "median_ms": 1.026300000376068,
+   "min_ms": 0.9974500026146416,
+   "max_ms": 1.0940999964077491,
+   "p90_ms": 1.1404000033508055
+  },
+  "torchscript | b64/t8 | (c) + gộp RevIN-norm, MovingAvg, Conv (M)": {
+   "median_ms": 0.9064500009117182,
+   "min_ms": 0.851249998959247,
+   "max_ms": 0.9282499959226698,
+   "p90_ms": 0.9777000013855286
+  },
+  "eager | b64/t8 | (d) + ghép [M; K] thành 1 einsum": {
+   "median_ms": 1.0587500037217978,
+   "min_ms": 0.9664500030339696,
+   "max_ms": 1.084299998183269,
+   "p90_ms": 1.1372999942977913
+  },
+  "torchscript | b64/t8 | (d) + ghép [M; K] thành 1 einsum": {
+   "median_ms": 0.8512999993399717,
+   "min_ms": 0.8393999996769708,
+   "max_ms": 0.8845000011206139,
+   "p90_ms": 0.9214999954565428
+  },
+  "eager | b1/t1 | (a) gốc": {
+   "median_ms": 0.37475000135600567,
+   "min_ms": 0.3690999947139062,
+   "max_ms": 0.387700001738267,
+   "p90_ms": 0.410699998610653
+  },
+  "torchscript | b1/t1 | (a) gốc": {
+   "median_ms": 0.24775000201771036,
+   "min_ms": 0.23710000095888972,
+   "max_ms": 0.25105000167968683,
+   "p90_ms": 0.2829000004567206
+  },
+  "eager | b1/t1 | (a') viết lại dạng hàm, chưa gộp": {
+   "median_ms": 0.3262999998696614,
+   "min_ms": 0.3215500037185848,
+   "max_ms": 0.3339500035508536,
+   "p90_ms": 0.34830000367946923
+  },
+  "torchscript | b1/t1 | (a') viết lại dạng hàm, chưa gộp": {
+   "median_ms": 0.25070000265259296,
+   "min_ms": 0.24905000100261532,
+   "max_ms": 0.25440000172238797,
+   "p90_ms": 0.27579999732552096
+  },
+  "eager | b1/t1 | (b) + gộp trend & inverse RevIN (K)": {
+   "median_ms": 0.34735000008367933,
+   "min_ms": 0.3341000046930276,
+   "max_ms": 0.3519999954733066,
+   "p90_ms": 0.3758999955607578
+  },
+  "torchscript | b1/t1 | (b) + gộp trend & inverse RevIN (K)": {
+   "median_ms": 0.26404999880469404,
+   "min_ms": 0.25090000417549163,
+   "max_ms": 0.2684499995666556,
+   "p90_ms": 0.2902999985963106
+  },
+  "eager | b1/t1 | (c) + gộp RevIN-norm, MovingAvg, Conv (M)": {
+   "median_ms": 0.21040000137872994,
+   "min_ms": 0.20680000307038426,
+   "max_ms": 0.21269999706419185,
+   "p90_ms": 0.2238000015495345
+  },
+  "torchscript | b1/t1 | (c) + gộp RevIN-norm, MovingAvg, Conv (M)": {
+   "median_ms": 0.16630000027362257,
+   "min_ms": 0.16260000120382756,
+   "max_ms": 0.18104999981005676,
+   "p90_ms": 0.17729999672155827
+  },
+  "eager | b1/t1 | (d) + ghép [M; K] thành 1 einsum": {
+   "median_ms": 0.2023999986704439,
+   "min_ms": 0.19629999951575883,
+   "max_ms": 0.20349999977042899,
+   "p90_ms": 0.22209999588085338
+  },
+  "torchscript | b1/t1 | (d) + ghép [M; K] thành 1 einsum": {
+   "median_ms": 0.15870000061113387,
+   "min_ms": 0.15150000035646372,
+   "max_ms": 0.16834999769343995,
+   "p90_ms": 0.17439999646740034
+  },
+  "eager | b64/t1 | (a) gốc": {
+   "median_ms": 2.6300500030629337,
+   "min_ms": 2.556799998274073,
+   "max_ms": 2.685900002688868,
+   "p90_ms": 2.9474000039044768
+  },
+  "torchscript | b64/t1 | (a) gốc": {
+   "median_ms": 2.4303499994857702,
+   "min_ms": 2.3626500005775597,
+   "max_ms": 2.534949995606439,
+   "p90_ms": 2.6994000072591007
+  },
+  "eager | b64/t1 | (a') viết lại dạng hàm, chưa gộp": {
+   "median_ms": 2.617499998450512,
+   "min_ms": 2.5820500013651326,
+   "max_ms": 2.827149997756351,
+   "p90_ms": 2.8941999989910983
+  },
+  "torchscript | b64/t1 | (a') viết lại dạng hàm, chưa gộp": {
+   "median_ms": 2.623149997816654,
+   "min_ms": 2.4725999974180013,
+   "max_ms": 2.7077000013377983,
+   "p90_ms": 3.026400001544971
+  },
+  "eager | b64/t1 | (b) + gộp trend & inverse RevIN (K)": {
+   "median_ms": 2.7041499961342197,
+   "min_ms": 2.559650001785485,
+   "max_ms": 2.7286000004096422,
+   "p90_ms": 3.0363000041688792
+  },
+  "torchscript | b64/t1 | (b) + gộp trend & inverse RevIN (K)": {
+   "median_ms": 2.5579500033927616,
+   "min_ms": 2.528699998947559,
+   "max_ms": 2.6670000006561168,
+   "p90_ms": 2.8919000033056363
+  },
+  "eager | b64/t1 | (c) + gộp RevIN-norm, MovingAvg, Conv (M)": {
+   "median_ms": 1.9801499984168913,
+   "min_ms": 1.8896500005212147,
+   "max_ms": 2.018599996517878,
+   "p90_ms": 2.1481000003404915
+  },
+  "torchscript | b64/t1 | (c) + gộp RevIN-norm, MovingAvg, Conv (M)": {
+   "median_ms": 1.9253499995102175,
+   "min_ms": 1.8760999992082361,
+   "max_ms": 2.0274999988032505,
+   "p90_ms": 2.1040999999968335
+  },
+  "eager | b64/t1 | (d) + ghép [M; K] thành 1 einsum": {
+   "median_ms": 1.9248000025982037,
+   "min_ms": 1.8927000019175466,
+   "max_ms": 1.9752999978663865,
+   "p90_ms": 2.116700001352001
+  },
+  "torchscript | b64/t1 | (d) + ghép [M; K] thành 1 einsum": {
+   "median_ms": 1.9576500017137732,
+   "min_ms": 1.876100002846215,
+   "max_ms": 2.042849999270402,
+   "p90_ms": 2.1531000020331703
+  }
+ }
+}
