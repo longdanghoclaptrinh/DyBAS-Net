@@ -68,13 +68,36 @@ class FoldedDyTimeNet(nn.Module):
         Wt = model.trend_proj.weight.detach().to(d64)                              # [S, L]
         bt = model.trend_proj.bias.detach().to(d64)
 
-        M = gamma[:, None, None] * (T @ (I - A))                                   # [C, L, L]
         center = I - torch.ones(L, L, dtype=d64) / L
-        K = (gamma * inv_g)[:, None, None] * (Wt @ A @ center) + torch.ones(S, L, dtype=d64) / L  # [C, S, L]
-        c = beta[:, None] * Wt.sum(1)[None] + bt[None] - beta[:, None]              # [C, S]
         bp = model.projection.bias.detach().to(d64)
-
         f32 = lambda t: t.to(torch.float32).contiguous()                           # noqa: E731
+        self.cycle_len = model.cycle_len
+        if self.cycle_len:
+            # RCF: seasonal = trend = r = z − q_φ (không có MovingAvg). Không còn (I − A) để triệt tiêu μ,
+            # nên dùng ma trận centering; β và chu kỳ thành bảng tra theo pha φ:
+            #   pre = γ T C x / σ + e_φ,        e_φ = T (β1 − q_φ)
+            #   ŷ   = K x + ρ (Proj(h) + g_φ),  K = κ W_t C + 11ᵀ/L
+            #   g_φ = b_p + W_t (β1 − q_φ) + b_t + q′_φ − β1      (q′_φ: chu kỳ của tương lai)
+            if not self.concat:
+                raise ValueError("Chế độ RCF chỉ hỗ trợ gộp đầy đủ")
+            W = self.cycle_len
+            Q = model.cycle.data.detach().to(d64)                                  # [W, C]
+            phase = torch.arange(W)[:, None]
+            q_in = Q[(phase + torch.arange(L)[None]) % W].permute(0, 2, 1)         # [W, C, L]
+            q_out = Q[(phase + L + torch.arange(S)[None]) % W].permute(0, 2, 1)    # [W, C, S]
+            v = beta[None, :, None] - q_in                                          # [W, C, L]
+            M = gamma[:, None, None] * (T @ center)
+            K = (gamma * inv_g)[:, None, None] * (Wt @ center)[None] + torch.ones(S, L, dtype=d64) / L
+            e = torch.einsum("cij,wcj->wci", T, v)                                  # [W, C, L]
+            g = bp + torch.einsum("sl,wcl->wcs", Wt, v) + bt + q_out - beta[None, :, None]
+            self.register_buffer("pre_table", f32(e))
+            self.register_buffer("out_table", f32(g))
+            c = torch.zeros(C, S, dtype=d64)
+        else:
+            M = gamma[:, None, None] * (T @ (I - A))                               # [C, L, L]
+            K = (gamma * inv_g)[:, None, None] * (Wt @ A @ center) + torch.ones(S, L, dtype=d64) / L  # [C, S, L]
+            c = beta[:, None] * Wt.sum(1)[None] + bt[None] - beta[:, None]          # [C, S]
+
         self.register_buffer("M", f32(M))
         self.register_buffer("K", f32(K))
         self.register_buffer("MK", f32(torch.cat([M, K], 1)))                      # [C, L+S, L]
@@ -105,8 +128,14 @@ class FoldedDyTimeNet(nn.Module):
         s = s + F.linear(F.gelu(F.linear(self.iv_norm(s), self.iv_w1, self.iv_b1)), self.iv_w2, self.iv_b2)
         return F.linear(s, self.proj_w)                                             # [B, C, S]
 
-    def forward(self, x):
+    def forward(self, x, cycle_index=None):
         sigma = x.std(-1, keepdim=True, unbiased=False) + self.eps                 # [B, C, 1]
+        if self.cycle_len:
+            # RCF đã gộp: 1 einsum + 2 lần tra bảng theo pha.
+            z = torch.einsum("bcl,col->bco", x, self.MK)
+            pre = z[..., :self.L] / sigma + self.pre_table[cycle_index]
+            p = self._core(pre)
+            return torch.addcmul(z[..., self.L:], sigma * self.inv_g, p + self.out_table[cycle_index])
         if self.concat:
             z = torch.einsum("bcl,col->bco", x, self.MK)
             pre, trend = z[..., :self.L] / sigma, z[..., self.L:]

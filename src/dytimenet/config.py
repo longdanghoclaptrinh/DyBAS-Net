@@ -40,6 +40,7 @@ class ExperimentConfig:
     device: str = "auto"
     cross_residual: str = "double"
     model: str = "dytimenet"
+    cycle_len: int = 0   # > 0: thay MovingAvg bằng RCF (CycleNet) với chu kỳ dài cycle_len bước
 
     def validate(self):
         """Reject invalid settings before reading data or creating a checkpoint."""
@@ -50,7 +51,7 @@ class ExperimentConfig:
             value = getattr(self, name)
             if type(value) is not int or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
-        for name in ("warmup_epochs", "num_workers", "seed"):
+        for name in ("warmup_epochs", "num_workers", "seed", "cycle_len"):
             value = getattr(self, name)
             if type(value) is not int or value < 0:
                 raise ValueError(f"{name} must be a non-negative integer")
@@ -95,7 +96,7 @@ class ExperimentConfig:
         """All constructor arguments needed to rebuild the exact architecture."""
         names = ("seq_len", "pred_len", "d_model", "num_layers", "p1", "p2",
                  "ffn_ratio", "hidden_ratio", "dropout", "affine_revin", "decomp_kernel",
-                 "cross_residual")
+                 "cross_residual", "cycle_len")
         return {"num_vars": num_vars, **{name: getattr(self, name) for name in names}}
 
     def to_dict(self):

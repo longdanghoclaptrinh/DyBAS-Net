@@ -55,7 +55,8 @@ def train(config):
     # 2. Đọc CSV, tạo các tập dữ liệu và khởi tạo model.
     train_loader, val_loader, test_loader, num_vars = get_dataloaders(
         config.data_path, config.seq_len, config.pred_len, config.batch_size,
-        config.num_workers, config.target_cols, config.scale, dataset_name=config.dataset)
+        config.num_workers, config.target_cols, config.scale, dataset_name=config.dataset,
+        cycle_len=config.cycle_len)
     model = build_model(config.model, **config.model_kwargs(num_vars)).to(device)
     print(f"{config.model} | {config.dataset} | L={config.seq_len} S={config.pred_len} | "
           f"device={device} | parameters={model.count_parameters():,}")
@@ -136,7 +137,7 @@ def evaluate_checkpoint(checkpoint_path, data_path=None, batch_size=None, device
     dataset = TimeSeriesDataset(
         config.data_path, config.seq_len, config.pred_len, "test", config.target_cols, config.scale,
         dataset_name=config.dataset, scaler_state=checkpoint["scaler"],
-        expected_columns=checkpoint["feature_columns"])
+        expected_columns=checkpoint["feature_columns"], cycle_len=config.cycle_len)
     if list(dataset.split_counts) != checkpoint["split_counts"]:
         raise ValueError("Dataset split counts differ from the checkpoint")
     loader = DataLoader(dataset, batch_size=config.batch_size, num_workers=config.num_workers,
