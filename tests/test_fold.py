@@ -88,3 +88,30 @@ def test_segment_baselines_match_paper_size(name, params):
     assert model.count_parameters() == params
     assert model(torch.randn(2, 3, 720)).shape == (2, 3, 720)
     assert build_model(name, num_vars=3, seq_len=100, pred_len=50, period=24)(torch.randn(2, 3, 100)).shape == (2, 3, 50)
+
+
+@pytest.mark.parametrize("variant", ["double", "norm"])
+@pytest.mark.parametrize("cycle_len, affine", [(0, True), (0, False), (24, True), (24, False)])
+def test_shared_fold_matches_original(variant, cycle_len, affine):
+    """Gộp dùng chung (bộ nhớ O(L·S)) phải cho cùng kết quả với mô hình gốc, kể cả cửa sổ hằng số."""
+    set_seed(0)
+    model = DyTimeNet(7, 96, 192, d_model=32, cross_residual=variant, cycle_len=cycle_len,
+                      affine_revin=affine).eval()
+    with torch.no_grad():
+        if cycle_len:
+            model.cycle.data.normal_()
+        if affine:
+            model.revin.affine_weight.uniform_(0.5, 1.5)
+            model.revin.affine_bias.normal_()
+        x = torch.randn(8, 7, 96) * 3 + 5
+        x[:, 2] = 37.5
+        args = (torch.randint(0, 24, (8,)),) if cycle_len else ()
+        folded = fold(model, mode="shared")
+        assert folded.mode == "shared" and not hasattr(folded, "MK")
+        torch.testing.assert_close(folded(x, *args), model(x, *args), rtol=1e-5, atol=5e-5)
+
+
+def test_auto_mode_picks_shared_for_large_inputs():
+    small = DyTimeNet(7, 96, 96, d_model=32, cross_residual="norm").eval()
+    large = DyTimeNet(64, 336, 336, d_model=32, cross_residual="norm").eval()
+    assert fold(small).mode == "channel" and fold(large).mode == "shared"
