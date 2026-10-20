@@ -41,9 +41,10 @@ def candidates(C, L, S, period, cycle, with_fold):
     }
     for m in out.values():
         m.eval()
-    if with_fold:
-        out["DyTimeNet (norm) — đã gộp"] = fold(out["DyTimeNet (norm)"])
-        out["DyTimeNet-RCF — đã gộp"] = fold(out["DyTimeNet-RCF"])
+    for mode in ("channel", "shared"):
+        if mode == "shared" or with_fold:
+            out[f"DyTimeNet (norm) — gộp {mode}"] = fold(out["DyTimeNet (norm)"], mode=mode)
+            out[f"DyTimeNet-RCF — gộp {mode}"] = fold(out["DyTimeNet-RCF"], mode=mode)
     return out
 
 
@@ -73,7 +74,7 @@ def bench(name, cfg, S, with_fold, rounds=5):
     rows = {}
     with torch.inference_mode():
         for label, m in models.items():
-            params = sum(p.numel() for p in m.parameters()) if not label.endswith("gộp") else None
+            params = sum(p.numel() for p in m.parameters()) if "gộp" not in label else None
             buffers = sum(b.numel() * b.element_size() for b in m.buffers())
             rows[label] = {"params": params, "MACs/mẫu": macs(m, x_all[:1], idx_all[:1]), "buffer_MB": buffers / 2**20}
         for b, t in cfg["points"]:
@@ -98,12 +99,14 @@ def fmt_macs(v):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--no_fold_paper", action="store_true", help="bỏ bản gộp ở cấu hình paper (tốn RAM)")
+    parser.add_argument("--no_fold_paper", action="store_true", help="bỏ bản gộp channel ở cấu hình paper (tốn RAM)")
     args = parser.parse_args(argv)
     results, lines = {}, ["# DyTimeNet so với TimeBase/SparseTSF/baseline tuyến tính: latency CPU và MACs (cùng máy)", "",
                           "CPU AMD Ryzen 7 7840HS, PyTorch eager, `inference_mode`, model khởi tạo ngẫu nhiên (latency không "
                           "phụ thuộc trọng số). Median 5 vòng xen kẽ. MACs đếm bằng `torch.utils.flop_counter` (FLOPs/2), "
-                          "mỗi mẫu. TimeBase: P = chu kỳ, R = 6, không loss trực giao (không ảnh hưởng suy luận).", ""]
+                          "mỗi mẫu. TimeBase: P = chu kỳ, R = 6, không loss trực giao (không ảnh hưởng suy luận). "
+                          "Gộp channel: ma trận riêng từng kênh (bộ nhớ O(C·L·(L+S))); gộp shared: Conv depthwise + "
+                          "Linear trend dùng chung (bộ nhớ O(L·S)).", ""]
     for name, cfg in SETTINGS.items():
         for S in cfg["S"]:
             key = f"{name}_C{cfg['C']}_L{cfg['L']}_S{S}"
