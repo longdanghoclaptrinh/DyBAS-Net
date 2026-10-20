@@ -41,13 +41,16 @@ class ExperimentConfig:
     cross_residual: str = "double"
     model: str = "dytimenet"
     cycle_len: int = 0   # > 0: thay MovingAvg bằng RCF (CycleNet) với chu kỳ dài cycle_len bước
+    period: int = 24     # độ dài đoạn P của TimeBase/SparseTSF
+    basis_num: int = 6   # số basis R của TimeBase
+    mix_lr: float = 0.0  # > 0: lr riêng cho nhánh trộn kênh của DyTimeBase (lr dùng cho backbone)
 
     def validate(self):
         """Reject invalid settings before reading data or creating a checkpoint."""
         if self.dataset not in ("ETTh1", "ETTh2", "ETTm1", "ETTm2", "Weather"):
             raise ValueError("dataset must be ETTh1, ETTh2, ETTm1, ETTm2, or Weather")
         for name in ("seq_len", "pred_len", "d_model", "num_layers", "batch_size",
-                     "epochs", "patience", "decomp_kernel"):
+                     "epochs", "patience", "decomp_kernel", "period", "basis_num"):
             value = getattr(self, name)
             if type(value) is not int or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
@@ -79,8 +82,10 @@ class ExperimentConfig:
         for name in ("data_path", "save_dir"):
             if not isinstance(getattr(self, name), str) or not getattr(self, name).strip():
                 raise ValueError(f"{name} must be a non-empty path string")
-        if self.model not in ("dytimenet", "rlinear", "dlinear"):
-            raise ValueError("model must be dytimenet, rlinear, or dlinear")
+        if self.model not in ("dytimenet", "rlinear", "dlinear", "timebase", "sparsetsf", "dytimebase"):
+            raise ValueError("model must be dytimenet, rlinear, dlinear, timebase, sparsetsf, or dytimebase")
+        if isinstance(self.mix_lr, bool) or not isinstance(self.mix_lr, (int, float)) or self.mix_lr < 0:
+            raise ValueError("mix_lr must be a non-negative number")
         if self.cross_residual not in ("double", "single", "norm"):
             raise ValueError("cross_residual must be double, single, or norm")
         if self.device not in ("auto", "cpu", "cuda"):
@@ -97,6 +102,8 @@ class ExperimentConfig:
         names = ("seq_len", "pred_len", "d_model", "num_layers", "p1", "p2",
                  "ffn_ratio", "hidden_ratio", "dropout", "affine_revin", "decomp_kernel",
                  "cross_residual", "cycle_len")
+        if self.model in ("timebase", "sparsetsf", "dytimebase"):
+            names += ("period", "basis_num")
         return {"num_vars": num_vars, **{name: getattr(self, name) for name in names}}
 
     def to_dict(self):
@@ -134,7 +141,7 @@ def training_parser():
         if name == "target_cols":
             parser.add_argument("--target_cols", nargs="+", default=None)
         elif name == "model":
-            parser.add_argument("--model", choices=("dytimenet", "rlinear", "dlinear"), default=None)
+            parser.add_argument("--model", choices=("dytimenet", "rlinear", "dlinear", "timebase", "sparsetsf", "dytimebase"), default=None)
         elif name == "cross_residual":
             parser.add_argument("--cross_residual", choices=("double", "single", "norm"), default=None)
         elif isinstance(value, bool):

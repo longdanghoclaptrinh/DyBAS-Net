@@ -51,8 +51,8 @@ def cosine_lr(optimizer, epoch, lr_init, total_epochs, warmup_epochs=2):
     else:
         progress = (epoch - warmup_epochs) / max(1, total_epochs - warmup_epochs)
         lr = lr_init * 0.5 * (1 + math.cos(math.pi * progress))
-    for pg in optimizer.param_groups:
-        pg["lr"] = lr
+    for pg in optimizer.param_groups:   # nhóm có base_lr riêng giữ nguyên tỉ lệ so với lr_init
+        pg["lr"] = lr * pg.get("base_lr", lr_init) / lr_init
     return lr
 
 

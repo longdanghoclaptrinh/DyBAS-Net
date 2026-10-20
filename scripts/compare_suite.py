@@ -1,7 +1,8 @@
 """Bảng độ chính xác và latency cho các biến thể train bằng scripts/run_suite.py (cùng pipeline).
 
-Đọc results/suite_<dataset>.json (và các file kết quả cũ truyền qua --extra), ghi results/compare_suite_<dataset>.md
-và results/compare_suite_<dataset>_latency.json. Latency đo xen kẽ ở seed 2021; biến thể DyTimeNet đo cả bản đã gộp.
+Đọc results/suite_<dataset>.json (hoặc suite_<dataset>_L<L>.json với --seq_len; và các file kết quả cũ truyền qua
+--extra), ghi results/compare_suite_<tag>.md và results/compare_suite_<tag>_latency.json. TimeBase: với mỗi horizon
+chọn lr có val loss trung bình (3 seed) thấp nhất, rồi báo MSE test của lr đó. Latency đo xen kẽ ở seed 2021; biến thể DyTimeNet đo cả bản đã gộp.
 Ví dụ: python scripts/compare_suite.py --dataset Weather
        python scripts/compare_suite.py --dataset ETTh1 --extra results/rcf_etth1.json --no_latency
 """
@@ -25,7 +26,8 @@ from dytimenet.models.folded import fold
 HORIZONS = (96, 192, 336, 720)
 SEEDS = (2021, 2022, 2023)
 LABELS = {"dyt_norm": "DyTimeNet (norm)", "dyt_rcf": "DyTimeNet-RCF", "dyt_rcf_noaff": "DyTimeNet-RCF (RevIN không affine)",
-          "rlinear": "RLinear", "cyclelinear": "CycleNet/Linear", "dlinear": "DLinear"}
+          "rlinear": "RLinear", "cyclelinear": "CycleNet/Linear", "dlinear": "DLinear",
+          "timebase": "TimeBase (lr chọn theo val)", "dytbase": "DyTimeBase (lr chọn theo val)"}
 POINTS = [(1, 8), (64, 8), (1, 1), (64, 1)]
 
 
@@ -86,17 +88,29 @@ def main(argv=None):
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--extra", nargs="*", default=[], help="file kết quả cũ (dict key → run có 'variant')")
     parser.add_argument("--no_latency", action="store_true")
+    parser.add_argument("--seq_len", type=int, default=96)
     args = parser.parse_args(argv)
-    tag = args.dataset.lower()
-    runs = json.loads(Path(f"results/suite_{args.dataset}.json").read_text(encoding="utf-8"))
+    suffix = "" if args.seq_len == 96 else f"_L{args.seq_len}"
+    tag = f"{args.dataset.lower()}{suffix.lower()}"
+    runs = json.loads(Path(f"results/suite_{args.dataset}{suffix}.json").read_text(encoding="utf-8"))
     for path in args.extra:
         for run in json.loads(Path(path).read_text(encoding="utf-8")).values():
             runs.setdefault(f"{run['variant']}_S{run['pred_len']}_seed{run['seed']}", run)
+    chosen = {}
+    for family in ("timebase", "dytbase"):
+        for h in HORIZONS:
+            lrs = sorted({r["variant"] for r in runs.values() if r["variant"].startswith(f"{family}_lr")
+                          and all(f"{r['variant']}_S{h}_seed{s}" in runs for s in SEEDS)})
+            if lrs:
+                best = min(lrs, key=lambda v: statistics.mean(runs[f"{v}_S{h}_seed{s}"]["best_val"] for s in SEEDS))
+                chosen.setdefault(family, {})[h] = best.removeprefix(f"{family}_lr")
+                for s in SEEDS:
+                    runs[f"{family}_S{h}_seed{s}"] = runs[f"{best}_S{h}_seed{s}"]
     names = [n for n in LABELS if all(f"{n}_S{h}_seed{s}" in runs for h in HORIZONS for s in SEEDS)]
     lines = [
-        f"# {args.dataset}: DyTimeNet, DyTimeNet-RCF và baseline tuyến tính (cùng pipeline)",
+        f"# {args.dataset}, L = {args.seq_len}: DyTimeNet, DyTimeNet-RCF và baseline (cùng pipeline)",
         "",
-        "L = 96, Adam lr 5e-4, cosine, tối đa 100 epoch, patience 10, batch 64, seed 2021–2023, CPU 8 luồng. "
+        f"L = {args.seq_len}, Adam lr 5e-4, cosine, tối đa 100 epoch, patience 10, batch 64, seed 2021–2023, CPU 8 luồng. "
         "DyTimeNet dùng residual `norm`; RCF thay MovingAvg bằng chu kỳ học được (CycleNet). "
         "CycleNet/Linear = RevIN không affine + RCF + Linear L→S.",
         "",
@@ -112,6 +126,10 @@ def main(argv=None):
         avg_mae = [statistics.mean(get(h, s)["mae"] for h in HORIZONS) for s in SEEDS]
         epochs = statistics.mean(get(h, s)["epochs_run"] for h in HORIZONS for s in SEEDS)
         lines.append(f"| {LABELS[name]} | " + " | ".join(cells) + f" | {ms(avg_mse)} | {ms(avg_mae)} | {epochs:.1f} |")
+    for family, picks in chosen.items():
+        lines += ["", f"{LABELS[family]}: P theo paper TimeBase, R = 6, không loss trực giao; lr backbone chọn theo val "
+                  "trong {0.005, 0.02, 0.08}" + (", mix_lr = 5e-4" if family == "dytbase" else "") + ": "
+                  + ", ".join(f"S={h}: {lr}" for h, lr in picks.items()) + "."]
     params = {LABELS[n]: load_model(runs[f"{n}_S96_seed2021"])[0].count_parameters() for n in names}
     lines += ["", "Số tham số (S = 96): " + ", ".join(f"{k} {v:,}" for k, v in params.items()) + ".", ""]
 
