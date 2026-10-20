@@ -52,6 +52,7 @@ def main(argv=None):
     parser.add_argument("--seeds", type=int, nargs="+", default=[2021, 2022, 2023])
     parser.add_argument("--threads", type=int, default=8)
     parser.add_argument("--seq_len", type=int, default=96)
+    parser.add_argument("--results", default=None, help="file JSON kết quả (mặc định results/suite_<tag>.json)")
     args = parser.parse_args(argv)
     table = variants(args.dataset)
     unknown = set(args.variants) - set(table)
@@ -59,7 +60,7 @@ def main(argv=None):
         parser.error(f"Unknown variants: {sorted(unknown)}")
     from dytimenet.experiment import train
     tag = args.dataset if args.seq_len == 96 else f"{args.dataset}_L{args.seq_len}"
-    results = Path(f"results/suite_{tag}.json")
+    results = Path(args.results or f"results/suite_{tag}.json")
     runs = json.loads(results.read_text(encoding="utf-8")) if results.is_file() else {}
     # Xen kẽ biến thể trong cùng (horizon, seed) để độ trôi của máy ảnh hưởng đều.
     for horizon in args.horizons:
@@ -83,6 +84,8 @@ def main(argv=None):
                              if "epoch_seconds" in history else None,
                              "checkpoint": str(checkpoint)}
                 results.parent.mkdir(parents=True, exist_ok=True)
+                # Đọc lại và gộp trước khi ghi để không xoá kết quả của tiến trình khác ghi cùng file.
+                runs = {**(json.loads(results.read_text(encoding="utf-8")) if results.is_file() else {}), **runs}
                 results.write_text(json.dumps(runs, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
