@@ -65,3 +65,17 @@ def test_rcf_dataset_phase_and_cyclelinear():
     model = build_model(config.model, **config.model_kwargs(7))
     out = model(torch.randn(3, 7, 96), torch.tensor([0, 5, 23]))
     assert out.shape == (3, 7, 96)
+
+
+@pytest.mark.parametrize("cycle_len", [0, 24])
+def test_fold_stable_on_constant_windows(cycle_len):
+    """Cửa sổ hằng số (σ = 0, như lượng mưa = 0 trên Weather) không được khuếch đại sai số float32."""
+    set_seed(0)
+    model = DyTimeNet(7, 96, 96, d_model=32, cross_residual="norm", cycle_len=cycle_len).eval()
+    x = torch.randn(8, 7, 96)
+    x[:, 2] = 37.5                                    # kênh hằng số với mức lớn
+    x[:4, 5] = -12.25
+    idx = torch.randint(0, 24, (8,)) if cycle_len else None
+    args = (idx,) if cycle_len else ()
+    with torch.no_grad():
+        torch.testing.assert_close(fold(model)(x, *args), model(x, *args), rtol=1e-5, atol=5e-5)

@@ -12,7 +12,11 @@ Với từng kênh c, đặt x là input thô, σ = std(x) + ε, γ/β là affin
                        c_c = β_c W_t 1 + b_t − β_c 1_S
 
 Nhờ vậy RevIN-norm, MovingAvg, phép trừ seasonal, Conv1d, Linear trend và inverse RevIN
-còn lại: 1 phép std, 1 einsum (ghép [M; K]), 1 phép chia, 1 addcmul.
+còn lại: 1 phép std_mean, 1 einsum (ghép [M; K]), 1 phép chia, 1 addcmul.
+
+Vì M_c 1 = 0 và K_c 1 = 1, ta nhân với x − μ thay cho x rồi cộng μ vào nhánh trend (kết quả không đổi về
+toán học). Không trừ μ trước thì với cửa sổ gần hằng số (σ ≈ ε, ví dụ lượng mưa = 0 trên Weather), M_c x
+triệt tiêu trong float32 rồi bị khuếch đại 1/σ, và CrossV lan sai số sang các kênh khác.
 """
 
 import torch
@@ -129,28 +133,29 @@ class FoldedDyTimeNet(nn.Module):
         return F.linear(s, self.proj_w)                                             # [B, C, S]
 
     def forward(self, x, cycle_index=None):
-        sigma = x.std(-1, keepdim=True, unbiased=False) + self.eps                 # [B, C, 1]
+        sigma, mu = torch.std_mean(x, -1, keepdim=True, unbiased=False)            # [B, C, 1]
+        sigma = sigma + self.eps
+        xc = x - mu
         if self.cycle_len:
             # RCF đã gộp: 1 einsum + 2 lần tra bảng theo pha.
-            z = torch.einsum("bcl,col->bco", x, self.MK)
+            z = torch.einsum("bcl,col->bco", xc, self.MK)
             pre = z[..., :self.L] / sigma + self.pre_table[cycle_index]
             p = self._core(pre)
-            return torch.addcmul(z[..., self.L:], sigma * self.inv_g, p + self.out_table[cycle_index])
+            return torch.addcmul(z[..., self.L:] + mu, sigma * self.inv_g, p + self.out_table[cycle_index])
         if self.concat:
-            z = torch.einsum("bcl,col->bco", x, self.MK)
-            pre, trend = z[..., :self.L] / sigma, z[..., self.L:]
+            z = torch.einsum("bcl,col->bco", xc, self.MK)
+            pre, trend = z[..., :self.L] / sigma, z[..., self.L:] + mu
         else:
             if self.fold_seasonal:
-                pre = torch.einsum("bcl,col->bco", x, self.M) / sigma
+                pre = torch.einsum("bcl,col->bco", xc, self.M) / sigma
             else:
-                mu = x.mean(-1, keepdim=True)
-                xn = (x - mu) / sigma
+                xn = xc / sigma
                 if self.rev_affine:
                     xn = xn * self.rev_gamma[None, :, None] + self.rev_beta[None, :, None]
                 seasonal, x_trend = self.decomp(xn)
                 pre = self.temporal_conv(seasonal)
             if self.fold_trend:
-                trend = torch.einsum("bcl,csl->bcs", x, self.K)
+                trend = torch.einsum("bcl,csl->bcs", xc, self.K) + mu
             else:
                 trend = None
         p = self._core(pre)
