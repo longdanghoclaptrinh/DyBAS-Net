@@ -79,3 +79,12 @@ def test_fold_stable_on_constant_windows(cycle_len):
     args = (idx,) if cycle_len else ()
     with torch.no_grad():
         torch.testing.assert_close(fold(model)(x, *args), model(x, *args), rtol=1e-5, atol=5e-5)
+
+
+@pytest.mark.parametrize("name, params", [("timebase", 396), ("sparsetsf", 925)])
+def test_segment_baselines_match_paper_size(name, params):
+    """Cấu hình Table 3 của TimeBase (Electricity, L = S = 720, P = 24): TimeBase 0.39K tham số."""
+    model = build_model(name, num_vars=3, seq_len=720, pred_len=720, period=24)
+    assert model.count_parameters() == params
+    assert model(torch.randn(2, 3, 720)).shape == (2, 3, 720)
+    assert build_model(name, num_vars=3, seq_len=100, pred_len=50, period=24)(torch.randn(2, 3, 100)).shape == (2, 3, 50)
