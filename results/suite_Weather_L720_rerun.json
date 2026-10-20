@@ -1,0 +1,99 @@
+{
+  "dyt_rcf_S96_seed2021": {
+    "variant": "dyt_rcf",
+    "overrides": {
+      "cross_residual": "norm",
+      "cycle_len": 144
+    },
+    "seq_len": 720,
+    "pred_len": 96,
+    "seed": 2021,
+    "best_val": 0.3645314344906604,
+    "mse": 0.1512809784072703,
+    "mae": 0.2045404423240442,
+    "best_epoch": 15,
+    "epochs_run": 25,
+    "train_seconds": 588.036,
+    "mean_epoch_seconds": null,
+    "checkpoint": "checkpoints\\suite_Weather_L720\\Weather_L720_S96_seed2021_20261020T164454165988Z\\best.pt"
+  },
+  "cyclelinear_S96_seed2021": {
+    "variant": "cyclelinear",
+    "overrides": {
+      "model": "rlinear",
+      "cycle_len": 144,
+      "affine_revin": false
+    },
+    "seq_len": 720,
+    "pred_len": 96,
+    "seed": 2021,
+    "best_val": 0.4081740278014816,
+    "mse": 0.16791927612686683,
+    "mae": 0.22173569394590298,
+    "best_epoch": 28,
+    "epochs_run": 38,
+    "train_seconds": 583.2,
+    "mean_epoch_seconds": null,
+    "checkpoint": "checkpoints\\suite_Weather_L720\\Weather_L720_S96_seed2021_20261020T165447155135Z\\best.pt"
+  },
+  "timebase_lr0.005_S96_seed2021": {
+    "variant": "timebase_lr0.005",
+    "overrides": {
+      "model": "timebase",
+      "period": 4,
+      "basis_num": 6,
+      "lr": 0.005
+    },
+    "seq_len": 720,
+    "pred_len": 96,
+    "seed": 2021,
+    "best_val": 0.4160339718084792,
+    "mse": 0.1711016038142933,
+    "mae": 0.22616363023673022,
+    "best_epoch": 3,
+    "epochs_run": 13,
+    "train_seconds": 68.302,
+    "mean_epoch_seconds": null,
+    "checkpoint": "checkpoints\\suite_Weather_L720\\Weather_L720_S96_seed2021_20261020T170433021448Z\\best.pt"
+  },
+  "timebase_lr0.02_S96_seed2021": {
+    "variant": "timebase_lr0.02",
+    "overrides": {
+      "model": "timebase",
+      "period": 4,
+      "basis_num": 6,
+      "lr": 0.02
+    },
+    "seq_len": 720,
+    "pred_len": 96,
+    "seed": 2021,
+    "best_val": 0.4196408522212003,
+    "mse": 0.17161117430692543,
+    "mae": 0.2284886473792486,
+    "best_epoch": 8,
+    "epochs_run": 18,
+    "train_seconds": 98.739,
+    "mean_epoch_seconds": null,
+    "checkpoint": "checkpoints\\suite_Weather_L720\\Weather_L720_S96_seed2021_20261020T170542755082Z\\best.pt"
+  },
+  "timebase_lr0.08_S96_seed2021": {
+    "variant": "timebase_lr0.08",
+    "overrides": {
+      "model": "timebase",
+      "period": 4,
+      "basis_num": 6,
+      "lr": 0.08
+    },
+    "seq_len": 720,
+    "pred_len": 96,
+    "seed": 2021,
+    "best_val": 0.4361659500605359,
+    "mse": 0.17926182863050638,
+    "mae": 0.23963070939379255,
+    "best_epoch": 6,
+    "epochs_run": 16,
+    "train_seconds": 96.978,
+    "mean_epoch_seconds": null,
+    "checkpoint": "checkpoints\\suite_Weather_L720\\Weather_L720_S96_seed2021_20261020T170722907483Z\\best.pt"
+  }
+}
