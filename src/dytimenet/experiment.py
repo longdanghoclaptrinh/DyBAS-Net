@@ -84,7 +84,13 @@ def train(config):
     # 4. Chuẩn bị loss, optimizer và bộ chọn checkpoint theo validation loss.
     early = EarlyStopping(config.patience, config.min_delta, checkpoint_path, metadata)
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
+    groups = model.parameters()
+    if config.mix_lr and hasattr(model, "mix_parameters"):
+        mix = model.mix_parameters()
+        mix_ids = {id(p) for p in mix}
+        groups = [{"params": [p for p in model.parameters() if id(p) not in mix_ids], "base_lr": config.lr},
+                  {"params": mix, "base_lr": config.mix_lr}]
+    optimizer = optim.Adam(groups, lr=config.lr, weight_decay=config.weight_decay)
     history = []
     start = time.perf_counter()
     # 5. Mỗi epoch: cập nhật LR → train → validation → lưu checkpoint nếu cải thiện.
