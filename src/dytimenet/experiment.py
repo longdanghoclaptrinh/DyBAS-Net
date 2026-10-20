@@ -95,8 +95,8 @@ def train(config):
     start = time.perf_counter()
     # 5. Mỗi epoch: cập nhật LR → train → validation → lưu checkpoint nếu cải thiện.
     for epoch in range(config.epochs):
-        lr = cosine_lr(optimizer, epoch, config.lr, config.epochs, config.warmup_epochs)
-        train_m = run_epoch(model, train_loader, criterion, optimizer, device)
+        lr = cosine_lr(optimizer, epoch, config.lr, config.epochs, config.warmup_epochs, config.lr_schedule)
+        train_m = run_epoch(model, train_loader, criterion, optimizer, device, config.orth_weight, config.grad_clip)
         val_m = run_epoch(model, val_loader, criterion, device=device)
         history.append({"epoch": epoch + 1, "lr": lr,
                         **{f"train_{k}": v for k, v in train_m.items()},

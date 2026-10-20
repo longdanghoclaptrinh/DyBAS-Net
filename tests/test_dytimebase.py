@@ -31,3 +31,21 @@ def test_mix_lr_param_groups_follow_cosine():
     cosine_lr(opt, 10, 0.02, 100)
     ratio = opt.param_groups[1]["lr"] / opt.param_groups[0]["lr"]
     assert abs(ratio - 5e-4 / 0.02) < 1e-12
+
+
+def test_type3_schedule_matches_timebase():
+    opt = torch.optim.Adam([torch.nn.Parameter(torch.zeros(1))], lr=0.1)
+    lrs = [cosine_lr(opt, e, 0.1, 30, kind="type3") for e in range(7)]
+    assert lrs[:4] == [0.1] * 4
+    assert abs(lrs[4] - 0.08) < 1e-12 and abs(lrs[6] - 0.1 * 0.8 ** 3) < 1e-12
+
+
+def test_official_options_and_aux_loss():
+    config = load_config("configs/Weather.yaml", {"model": "dytimebase", "seq_len": 720, "pred_len": 96, "period": 4,
+                                                   "period_norm": True, "individual": True, "orth_weight": 0.04,
+                                                   "lr_schedule": "type3", "grad_clip": 0.0, "mix_lr": 5e-4})
+    model = build_model(config.model, **config.model_kwargs(21)).train()
+    out = model(torch.randn(2, 21, 720))
+    assert out.shape == (2, 21, 96) and model.aux_loss is not None and model.aux_loss.ndim == 0
+    model.eval(); model(torch.randn(2, 21, 720))
+    assert model.aux_loss is None

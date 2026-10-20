@@ -57,8 +57,28 @@ class DLinear(nn.Module):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
 
+class PerChannelLinear(nn.Module):
+    """Linear riêng cho từng kênh (individual = True của TimeBase) trên trục cuối của x [B, C, P, in]."""
+
+    def __init__(self, channels: int, in_features: int, out_features: int):
+        super().__init__()
+        bound = 1 / math.sqrt(in_features)
+        self.weight = nn.Parameter(torch.empty(channels, out_features, in_features).uniform_(-bound, bound))
+        self.bias = nn.Parameter(torch.empty(channels, out_features).uniform_(-bound, bound))
+
+    def forward(self, x):
+        return torch.einsum("bcpi,coi->bcpo", x, self.weight) + self.bias[None, :, None, :]
+
+
+def orthogonal_loss(basis):
+    """Loss trực giao của TimeBase: chuẩn Frobenius phần ngoài đường chéo của Gram EᵀE (E: [..., P, R]), lấy trung bình."""
+    gram = basis.transpose(-2, -1) @ basis
+    off = gram - torch.diag_embed(torch.diagonal(gram, dim1=-2, dim2=-1))
+    return torch.linalg.matrix_norm(off).mean()
+
+
 class _Segmented(nn.Module):
-    """Phần chung của SparseTSF/TimeBase: trừ mean, đệm trái cho đủ N·P, cắt [B·C, P, N] rồi ghép lại."""
+    """Phần chung của SparseTSF/TimeBase: đệm trái cho đủ N·P, cắt thành [B, C, P, N] (pha × đoạn) rồi ghép lại."""
 
     def __init__(self, seq_len: int, pred_len: int, period: int):
         super().__init__()
@@ -70,10 +90,16 @@ class _Segmented(nn.Module):
         B, C, _ = x.shape
         if self.pad:   # đệm bằng giá trị của đoạn kế tiếp (như paper: lấy từ X_{N−1})
             x = torch.cat([x[..., self.period - self.pad:self.period], x], -1)
-        return x.reshape(B * C, self.n_in, self.period).transpose(1, 2)        # [B·C, P, N]
+        return x.reshape(B, C, self.n_in, self.period).transpose(2, 3)         # [B, C, P, N]
 
-    def _merge(self, y, B, C):
-        return y.transpose(1, 2).reshape(B, C, -1)[..., :self.pred_len]       # [B, C, S]
+    def _merge(self, y):
+        B, C = y.shape[:2]
+        return y.transpose(2, 3).reshape(B, C, -1)[..., :self.pred_len]       # [B, C, S]
+
+    def _normalize(self, seg, period_norm):
+        """Trừ mean theo pha (period norm của TimeBase, trung bình trên N đoạn) hoặc mean cả cửa sổ."""
+        mean = seg.mean(-1, keepdim=True) if period_norm else seg.mean((-2, -1), keepdim=True)
+        return seg - mean, mean
 
     def count_parameters(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -90,16 +116,29 @@ class SparseTSF(_Segmented):
         mean = x.mean(-1, keepdim=True)
         z = x - mean
         z = self.conv(z.reshape(-1, 1, L)).reshape(B, C, L) + z
-        return self._merge(self.linear(self._segments(z)), B, C) + mean
+        return self._merge(self.linear(self._segments(z))) + mean
 
 
 class TimeBase(_Segmented):
-    def __init__(self, num_vars: int, seq_len: int, pred_len: int, period: int = 24, basis_num: int = 6, **_):
+    """Theo code chính thức (github.com/hqh0728/TimeBase): period_norm, individual, loss trực giao trên basis.
+
+    Khi train, self.aux_loss giữ loss trực giao của batch hiện tại (trainer nhân với orth_weight).
+    """
+
+    def __init__(self, num_vars: int, seq_len: int, pred_len: int, period: int = 24, basis_num: int = 6,
+                 period_norm: bool = False, individual: bool = False, **_):
         super().__init__(seq_len, pred_len, period)
-        self.basis = nn.Linear(self.n_in, basis_num)        # BasisExtract: N đoạn → R basis
-        self.forecast = nn.Linear(basis_num, self.n_out)    # SegmentForecast: R basis → N′ đoạn tương lai
+        self.period_norm = period_norm
+        if individual:
+            self.basis = PerChannelLinear(num_vars, self.n_in, basis_num)
+            self.forecast = PerChannelLinear(num_vars, basis_num, self.n_out)
+        else:
+            self.basis = nn.Linear(self.n_in, basis_num)        # BasisExtract: N đoạn → R basis
+            self.forecast = nn.Linear(basis_num, self.n_out)    # SegmentForecast: R basis → N′ đoạn tương lai
+        self.aux_loss = None
 
     def forward(self, x: torch.Tensor, cycle_index: torch.Tensor = None) -> torch.Tensor:
-        B, C, _ = x.shape
-        mean = x.mean(-1, keepdim=True)
-        return self._merge(self.forecast(self.basis(self._segments(x - mean))), B, C) + mean
+        seg, mean = self._normalize(self._segments(x), self.period_norm)
+        e = self.basis(seg)                                                          # [B, C, P, R]
+        self.aux_loss = orthogonal_loss(e) if self.training else None
+        return self._merge(self.forecast(e) + mean)
