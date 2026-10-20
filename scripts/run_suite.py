@@ -24,6 +24,24 @@ CYCLE = {"ETTh1": 24, "ETTh2": 24, "ETTm1": 96, "ETTm2": 96, "Weather": 144}
 # Độ dài đoạn P của TimeBase theo paper (Phụ lục C.1): chu kỳ tự nhiên, Weather dùng P = 4.
 TB_PERIOD = {"ETTh1": 24, "ETTh2": 24, "Weather": 4}
 TB_LRS = (0.005, 0.02, 0.08)
+# Siêu tham số chính thức của TimeBase theo từng horizon (scripts/etth1.sh, scripts/weather.sh trong
+# github.com/hqh0728/TimeBase): (orthogonal_weight, batch_size, learning_rate); chung: period_norm, R = 6,
+# 30 epoch, patience 5, lradj type3, Adam không weight decay, không clip gradient. Weather dùng individual = 1.
+TB_OFFICIAL = {
+    "ETTh1": {96: (0.16, 64, 0.1), 192: (0.16, 256, 0.4), 336: (0.08, 256, 0.4), 720: (0.12, 64, 0.05)},
+    "Weather": {96: (0.04, 512, 0.02), 192: (0.04, 512, 0.02), 336: (0.08, 512, 0.05), 720: (0.04, 512, 0.05)},
+}
+TB_INDIVIDUAL = {"ETTh1": False, "Weather": True}
+
+
+def official(dataset, model, **extra):
+    """Biến thể theo horizon: trả hàm horizon → overrides với siêu tham số chính thức của TimeBase."""
+    def overrides(horizon):
+        orth, batch, lr = TB_OFFICIAL[dataset][horizon]
+        return {"model": model, "period": TB_PERIOD[dataset], "basis_num": 6, "period_norm": True,
+                "individual": TB_INDIVIDUAL[dataset], "orth_weight": orth, "batch_size": batch, "lr": lr,
+                "epochs": 30, "patience": 5, "lr_schedule": "type3", "weight_decay": 0.0, "grad_clip": 0.0, **extra}
+    return overrides
 
 
 def variants(dataset):
@@ -41,6 +59,9 @@ def variants(dataset):
         **({f"dytbase_lr{lr:g}": {"model": "dytimebase", "period": TB_PERIOD[dataset], "basis_num": 6, "lr": lr,
                                   "mix_lr": 5e-4}
             for lr in TB_LRS} if dataset in TB_PERIOD else {}),
+        # Cùng backbone, lịch train và siêu tham số chính thức của TimeBase; DyTimeBase chỉ thêm nhánh trộn kênh.
+        **({"timebase_off": official(dataset, "timebase"),
+            "dytbase_off": official(dataset, "dytimebase", mix_lr=5e-4)} if dataset in TB_OFFICIAL else {}),
     }
 
 
@@ -70,13 +91,14 @@ def main(argv=None):
                 if key in runs:
                     continue
                 torch.set_num_threads(args.threads)
+                overrides = table[name](horizon) if callable(table[name]) else table[name]
                 config = load_config(f"configs/{args.dataset}.yaml", {
                     "seq_len": args.seq_len, "pred_len": horizon, "seed": seed, "device": "cpu",
-                    "save_dir": f"checkpoints/suite_{tag}", **table[name]})
+                    "save_dir": f"checkpoints/suite_{tag}", **overrides})
                 print(f"\n===== {args.dataset} {key} =====", flush=True)
                 checkpoint, summary = train(config)
                 history = pd.read_csv(Path(checkpoint).parent / "history.csv")
-                runs[key] = {"variant": name, "overrides": table[name], "seq_len": args.seq_len,
+                runs[key] = {"variant": name, "overrides": overrides, "seq_len": args.seq_len,
                              "pred_len": horizon, "seed": seed, "best_val": float(history["val_loss"].min()),
                              "mse": summary["MSE"], "mae": summary["MAE"], "best_epoch": summary["best_epoch"],
                              "epochs_run": int(len(history)), "train_seconds": summary["train_seconds"],

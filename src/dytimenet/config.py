@@ -44,6 +44,11 @@ class ExperimentConfig:
     period: int = 24     # độ dài đoạn P của TimeBase/SparseTSF
     basis_num: int = 6   # số basis R của TimeBase
     mix_lr: float = 0.0  # > 0: lr riêng cho nhánh trộn kênh của DyTimeBase (lr dùng cho backbone)
+    period_norm: bool = False  # TimeBase/DyTimeBase: trừ mean theo pha (use_period_norm của code chính thức)
+    individual: bool = False   # TimeBase/DyTimeBase: Linear basis/forecast riêng từng kênh
+    orth_weight: float = 0.0   # trọng số loss trực giao trên basis (TimeBase)
+    lr_schedule: str = "cosine"   # cosine (mặc định) hoặc type3 (lịch của TimeBase/SparseTSF)
+    grad_clip: float = 1.0     # chuẩn tối đa của gradient; 0 = không clip
 
     def validate(self):
         """Reject invalid settings before reading data or creating a checkpoint."""
@@ -76,7 +81,7 @@ class ExperimentConfig:
             raise ValueError("lr must be positive; weight_decay and min_delta cannot be negative")
         if self.ffn_ratio <= 0 or int(self.d_model * self.ffn_ratio) < 1 or self.hidden_ratio <= 0:
             raise ValueError("ffn_ratio and hidden_ratio must produce positive hidden dimensions")
-        for name in ("scale", "affine_revin"):
+        for name in ("scale", "affine_revin", "period_norm", "individual"):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f"{name} must be a boolean")
         for name in ("data_path", "save_dir"):
@@ -84,8 +89,12 @@ class ExperimentConfig:
                 raise ValueError(f"{name} must be a non-empty path string")
         if self.model not in ("dytimenet", "rlinear", "dlinear", "timebase", "sparsetsf", "dytimebase"):
             raise ValueError("model must be dytimenet, rlinear, dlinear, timebase, sparsetsf, or dytimebase")
-        if isinstance(self.mix_lr, bool) or not isinstance(self.mix_lr, (int, float)) or self.mix_lr < 0:
-            raise ValueError("mix_lr must be a non-negative number")
+        for name in ("mix_lr", "orth_weight", "grad_clip"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be a non-negative number")
+        if self.lr_schedule not in ("cosine", "type3"):
+            raise ValueError("lr_schedule must be cosine or type3")
         if self.cross_residual not in ("double", "single", "norm"):
             raise ValueError("cross_residual must be double, single, or norm")
         if self.device not in ("auto", "cpu", "cuda"):
@@ -103,7 +112,7 @@ class ExperimentConfig:
                  "ffn_ratio", "hidden_ratio", "dropout", "affine_revin", "decomp_kernel",
                  "cross_residual", "cycle_len")
         if self.model in ("timebase", "sparsetsf", "dytimebase"):
-            names += ("period", "basis_num")
+            names += ("period", "basis_num", "period_norm", "individual")
         return {"num_vars": num_vars, **{name: getattr(self, name) for name in names}}
 
     def to_dict(self):
@@ -142,6 +151,8 @@ def training_parser():
             parser.add_argument("--target_cols", nargs="+", default=None)
         elif name == "model":
             parser.add_argument("--model", choices=("dytimenet", "rlinear", "dlinear", "timebase", "sparsetsf", "dytimebase"), default=None)
+        elif name == "lr_schedule":
+            parser.add_argument("--lr_schedule", choices=("cosine", "type3"), default=None)
         elif name == "cross_residual":
             parser.add_argument("--cross_residual", choices=("double", "single", "norm"), default=None)
         elif isinstance(value, bool):

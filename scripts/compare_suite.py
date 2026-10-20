@@ -27,7 +27,8 @@ HORIZONS = (96, 192, 336, 720)
 SEEDS = (2021, 2022, 2023)
 LABELS = {"dyt_norm": "DyTimeNet (norm)", "dyt_rcf": "DyTimeNet-RCF", "dyt_rcf_noaff": "DyTimeNet-RCF (RevIN không affine)",
           "rlinear": "RLinear", "cyclelinear": "CycleNet/Linear", "dlinear": "DLinear",
-          "timebase": "TimeBase (lr chọn theo val)", "dytbase": "DyTimeBase (lr chọn theo val)"}
+          "timebase": "TimeBase (lr chọn theo val)", "dytbase": "DyTimeBase (lr chọn theo val)",
+          "timebase_off": "TimeBase (siêu tham số chính thức)", "dytbase_off": "DyTimeBase (siêu tham số TimeBase)"}
 POINTS = [(1, 8), (64, 8), (1, 1), (64, 1)]
 
 
