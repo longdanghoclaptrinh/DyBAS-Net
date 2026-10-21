@@ -30,3 +30,11 @@ dist/
 Thumbs.db
 .idea/
 .vscode/
+
+# LaTeX (file phụ khi biên dịch trong VS Code)
+*.aux
+*.synctex.gz
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
