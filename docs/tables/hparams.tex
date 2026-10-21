@@ -1,0 +1,19 @@
+\begin{table}[H]
+\centering
+\caption{Siêu tham số của DyTimeBase. Xương sống: theo script chính thức của TimeBase~\cite{timebase} cho từng độ dài dự báo $S\in\{96,192,336,720\}$. Nhánh trộn kênh: giữ nguyên bộ đã tối ưu của DyTimeNet (Đồ án I, Bảng 3.1).}
+\label{tab:hparams}
+\small
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}llllllccc@{}}
+\toprule
+ & \multicolumn{5}{c}{Xương sống (theo $S=96/192/336/720$)} & & \multicolumn{2}{c}{Nhánh trộn kênh}\\
+\cmidrule(lr){2-6}\cmidrule(l){8-9}
+Dataset & $P$ & $R$ & $\alpha_B$ & Batch & $\lambda_{orth}$ & Riêng kênh & $D$ & $p_1$ / $p_2$\\
+\midrule
+ETTh1 & 24/24/24/24 & 6/6/6/6 & 0.1/0.4/0.4/0.05 & 64/256/256/64 & 0.16/0.16/0.08/0.12 & không & 64 & 0.1 / 0.1\\
+ETTh2 & 24/24/24/24 & 6/4/6/6 & 0.2/0.06/0.4/0.4 & 512/512/64/64 & 0.2/0.08/0.12/0.12 & không & 64 & 0.6 / 0.6\\
+ETTm1 & 4/4/4/6 & 18/20/20/20 & 0.02/0.02/0.02/0.01 & 512/256/256/128 & 0.04/0.04/0.08/0.12 & không & 64 & 0.1 / 0.2\\
+ETTm2 & 4/4/4/6 & 20/20/20/20 & 0.01/0.01/0.01/0.01 & 64/64/64/64 & 0.04/0.04/0.04/0.04 & không & 32 & 0.1 / 0.1\\
+Weather & 4/4/4/4 & 6/6/6/6 & 0.02/0.02/0.05/0.05 & 512/512/512/512 & 0.04/0.04/0.08/0.04 & có & 64 & 0.1 / 0.1\\
+\bottomrule
+\end{tabular}}
+\end{table}

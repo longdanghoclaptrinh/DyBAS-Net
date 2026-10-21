@@ -1,0 +1,27 @@
+\begin{table}[H]
+\centering
+\caption{Hiệu năng tính toán trên cùng một máy CPU, cấu hình như Table~3 của~\cite{timebase}: Electricity ($C=321$), $L=S=720$. Max Mem: đỉnh bộ nhớ RAM khi huấn luyện với batch 12; Epoch Time: thời gian một bước huấn luyện (batch 12) nhân số bước của một epoch (1\,414); Infer Time: dự báo 1 mẫu, 8 luồng. Sắp xếp theo Infer Time.}
+\label{tab:efficiency}
+\small
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Mô hình & Params & MACs & Max Mem (MB) & Epoch Time (s) & Infer Time (ms) & So với DyTimeBase\\
+\midrule
+TimeBase & 0.40K & 2.77M & 117 & 20 & 0.34 & 0.52$\times$\\
+\textbf{DyTimeBase} & 190.51K & 23.81M & 147 & 38 & 0.66 & 1.00$\times$\\
+SparseTSF & 0.93K & 12.71M & 276 & 56 & 0.76 & 1.15$\times$\\
+FITS & 133.64K & 42.73M & 210 & 78 & 1.70 & 2.59$\times$\\
+DLinear & 1.04M & 332.81M & 150 & 55 & 1.93 & 2.94$\times$\\
+DyTimeNet (Đồ án I) & 785.14K & 211.80M & 285 & 131 & 2.14 & 3.25$\times$\\
+iTransformer & 5.47M & 2.10G & 997 & 695 & 10.66 & 16.23$\times$\\
+Informer & 12.45M & 7.91G & 2\,052 & 2\,926 & 66.16 & 100.66$\times$\\
+Autoformer & 12.14M & 8.97G & 5\,057 & 5\,302 & 83.39 & 126.88$\times$\\
+FEDformer & 18.44M & 8.99G & 3\,289 & 5\,367 & 135.93 & 206.81$\times$\\
+TimeMixer & 5.58M & 29.97G & $>$11\,264$^{\ddagger}$ & 16\,716 & 247.46 & 376.51$\times$\\
+PatchTST & 8.69M & 16.08G & 10\,346 & 82\,400 & 285.51 & 434.40$\times$\\
+TimesNet & 151.32M & 1081.75G & 4\,078 & 170\,983 & 3\,449.01 & 5\,247.64$\times$\\
+\bottomrule
+\end{tabular}}
+
+\footnotesize{$^{\ddagger}$ Vượt ngưỡng 11 GB RAM ở batch 12; Epoch Time của mô hình này đo ở batch 4.}
+\end{table}
