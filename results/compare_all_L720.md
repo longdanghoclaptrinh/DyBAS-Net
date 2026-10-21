@@ -84,10 +84,10 @@ Số lần đứng nhất (40 ô = 5 dataset × 4 horizon × MSE/MAE, tính cả
 | Biến thể | ETTh1 | ETTh2 | ETTm1 | ETTm2 | Weather | Trung bình |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | DyTimeBase (đầy đủ) | 0.4030 | 0.3580 | 0.3509 | 0.2634 | 0.2211 | 0.3193 |
-| bỏ CrossV | chưa chạy | chưa chạy | chưa chạy | chưa chạy | chưa chạy | — |
-| bỏ IntraV | chưa chạy | chưa chạy | chưa chạy | chưa chạy | chưa chạy | — |
+| bỏ CrossV | 0.4028 | 0.3595 | 0.3554 | 0.2615 | chưa chạy | — |
+| bỏ IntraV | 0.4004 | 0.3668 | 0.3524 | 0.2661 | chưa chạy | — |
 | bỏ cả nhánh trộn kênh (= TimeBase\*) | 0.4105 | 0.3627 | 0.3674 | 0.2539 | 0.2195 | 0.3228 |
-| đầy đủ, mix_lr 2e-3 | chưa chạy | chưa chạy | chưa chạy | chưa chạy | chưa chạy | — |
+| đầy đủ, mix_lr 2e-3 | 0.3992 | 0.3569 | 0.3554 | 0.2627 | chưa chạy | — |
 
 ## Tốc độ trên cùng máy (Electricity, C = 321, L = S = 720; chi tiết: results/bench_efficiency.md)
 
