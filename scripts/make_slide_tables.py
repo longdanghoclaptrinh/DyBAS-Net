@@ -62,7 +62,7 @@ def avg_table(table):
         for ds in DATASETS:
             for i in (0, 1):
                 cells.append(mark_color([table[(ds, "Avg")][k][i] for k in cols], table[(ds, "Avg")][c][i],
-                                        third=True))
+                                        third=False))
         rows.append(f"{name(c)} & " + " & ".join(cells) + r"\\")
         if c == "TimeBase*":
             rows.append(r"\midrule")
