@@ -33,13 +33,17 @@ def mark(values, v, digits=3):
     return rf"\underline{{{s}}}" if len(ranked) > 1 and round(v, digits) == ranked[1] else s
 
 
-def mark_color(values, v, digits=3):
-    """Đỏ đậm = tốt nhất, xanh dương = thứ hai (so sau khi làm tròn)."""
+def mark_color(values, v, digits=3, third=False):
+    """Đỏ đậm = tốt nhất, xanh dương = thứ hai, (tùy chọn) cam (Chocolate) = thứ ba (so sau khi làm tròn)."""
     ranked = sorted({round(x, digits) for x in values})
     s = f"{v:.{digits}f}"
     if round(v, digits) == ranked[0]:
         return rf"\textcolor{{red}}{{\textbf{{{s}}}}}"
-    return rf"\textcolor{{blue}}{{{s}}}" if len(ranked) > 1 and round(v, digits) == ranked[1] else s
+    if len(ranked) > 1 and round(v, digits) == ranked[1]:
+        return rf"\textcolor{{blue}}{{{s}}}"
+    if third and len(ranked) > 2 and round(v, digits) == ranked[2]:
+        return rf"\textcolor{{Chocolate}}{{{s}}}"
+    return s
 
 
 def wrap(body, cols, width=r"\textwidth"):
@@ -57,7 +61,8 @@ def avg_table(table):
         cells = []
         for ds in DATASETS:
             for i in (0, 1):
-                cells.append(mark_color([table[(ds, "Avg")][k][i] for k in cols], table[(ds, "Avg")][c][i]))
+                cells.append(mark_color([table[(ds, "Avg")][k][i] for k in cols], table[(ds, "Avg")][c][i],
+                                        third=True))
         rows.append(f"{name(c)} & " + " & ".join(cells) + r"\\")
         if c == "TimeBase*":
             rows.append(r"\midrule")
