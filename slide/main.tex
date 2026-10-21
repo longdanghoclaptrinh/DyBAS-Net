@@ -60,7 +60,7 @@
 
 % TITLE, AUTHORS, INSTITUTE, DATE
 
-\title[Đồ án 1]{\textbf{DyBAS-Net: Kết hợp học quan hệ động giữa các biến và dự báo theo đoạn dựa trên thành phần cơ sở cho chuỗi thời gian đa biến}}
+\title[Đồ án 1]{\textbf{Kết hợp học quan hệ động giữa các biến và dự báo theo đoạn dựa trên thành phần cơ sở cho chuỗi thời gian đa biến}}
 \author[Sinh viên thực hiện: Nguyễn Hải Long]{
 \begin{tabular}{ll}
     \textbf{Giảng viên hướng dẫn:} & \color{mqred}{\textbf{PGS. TS. Nguyễn Thị Ngọc Anh}} \\
@@ -87,7 +87,7 @@
 \end{frame}
 \AtBeginSection[]{
 \begin{frame}{Mục lục}
-    \tableofcontents[currentsubsection]
+    \tableofcontents[currentsection]
 \end{frame}
 }
 
@@ -102,11 +102,7 @@
 
     \vspace{0.15cm}
     \item \textbf{Xu hướng hiện nay:} dùng cửa sổ quá khứ rất dài ($L = 720$) để nắm phụ thuộc dài hạn, kéo theo số
-          tham số và khối lượng tính toán tăng mạnh. Ví dụ, với Electricity ($L=S=720$)\refnote{Huang2025TimeBase}:
-    \begin{itemize}
-        \item PatchTST: 8.69M tham số, 14.17G phép nhân--cộng (MACs) cho một mẫu.
-        \item TimeMixer: 30.30G MACs cho một mẫu.
-    \end{itemize}
+          tham số và khối lượng tính toán tăng mạnh\refnote{Huang2025TimeBase}.
 
     \vspace{0.15cm}
     \item \textbf{Hai yêu cầu cần đáp ứng cùng lúc:}
@@ -117,14 +113,10 @@
 \end{itemize}
 \end{frame}
 
-\begin{frame}{Đặc điểm 1: Tính lặp lại và hạng thấp}
+\begin{frame}{Đặc điểm 1: Tính lặp lại}
 \begin{itemize}
     \item \textbf{Tương đồng theo chu kỳ:} các đoạn dài một chu kỳ (ví dụ mỗi ngày) có hình dạng rất giống nhau, với hệ số
           tương quan Pearson giữa các đoạn cao\refnote{Huang2025TimeBase}.
-
-    \vspace{0.15cm}
-    \item \textbf{Xấp xỉ hạng thấp:} khi xếp các đoạn thành ma trận, các giá trị suy biến giảm rất nhanh trên ETTh1, ETTh2,
-          ETTm1, ETTm2, Weather, Electricity, Traffic. Thông tin tập trung ở một vài thành phần, phần còn lại là dư thừa.
 
     \vspace{0.15cm}
     \item \textbf{Hệ quả:} không nhất thiết phải mô hình hóa từng điểm thời gian. TimeBase chỉ dùng
@@ -142,9 +134,9 @@
 \begin{itemize}
     \item Các phương pháp chia làm hai nhóm theo cách xử lý biến\refnote{Han2024Capacity}:
     \begin{itemize}
-        \item \textbf{Độc lập kênh (CI)} (PatchTST, DLinear, TimeBase): mỗi biến dự báo riêng, bỏ qua các quan hệ hiệp
+        \item \textbf{Độc lập biến (CI)} (PatchTST, DLinear, TimeBase): mỗi biến dự báo riêng, bỏ qua các quan hệ hiệp
               biến quan trọng.
-        \item \textbf{Phụ thuộc kênh (CD)} (iTransformer, DyTimeNet): học mọi phụ thuộc mà không phân biệt, đưa thêm nhiễu
+        \item \textbf{Phụ thuộc biến (CD)} (iTransformer, DyTimeNet): học mọi phụ thuộc mà không phân biệt, đưa thêm nhiễu
               và giảm khả năng khái quát\refnote{Hu2025TimeFilter}.
     \end{itemize}
 
@@ -169,19 +161,19 @@ Nhóm mô hình & Ví dụ & Rất nhẹ & Học quan hệ liên biến\\
 Tuyến tính theo đoạn / tần số, CI & TimeBase, SparseTSF, FITS & \textcolor{ForestGreen}{\checkmark} & \textcolor{mqred}{$\times$}\\
 Transformer & PatchTST, iTransformer & \textcolor{mqred}{$\times$} & một phần\\
 Đồ thị, lọc phụ thuộc theo patch & TimeFilter & \textcolor{mqred}{$\times$} & \textcolor{ForestGreen}{\checkmark}\\
-MLP trộn kênh trên chuỗi gốc (chi phí theo $L$, $S$) & DyTimeNet & \textcolor{mqred}{$\times$} & \textcolor{ForestGreen}{\checkmark}\\
+MLP trộn biến trên chuỗi gốc (chi phí theo $L$, $S$) & DyTimeNet & \textcolor{mqred}{$\times$} & \textcolor{ForestGreen}{\checkmark}\\
 \bottomrule
 \end{tabular}}
 \end{center}
 
 \begin{itemize}
-    \item TimeBase giả định các biến \emph{đồng nhất} nên dùng chiến lược độc lập kênh\refnote{Huang2025TimeBase}.
-    \item TimeFilter dựng đồ thị trên $n = C\times N$ nút (biến, patch); ma trận khoảng cách có kích thước
-          $n\times n$\refnote{Hu2025TimeFilter}.
+    \item \refnote{Huang2025TimeBase}TimeBase giả định các biến \emph{đồng nhất} nên dùng chiến lược độc lập biến.
+    \item \refnote{Hu2025TimeFilter}TimeFilter dựng đồ thị trên $n = C\times N$ nút (biến, patch); ma trận khoảng cách có kích thước
+          $n\times n$.
 \end{itemize}
 
 \begin{alertblock}{Khoảng trống}
-Chưa có mô hình vừa giữ chi phí siêu nhẹ của dự báo theo đoạn, vừa học được phụ thuộc chéo có điều chuẩn thưa.
+Chưa có mô hình vừa giữ chi phí siêu nhẹ của dự báo theo đoạn, vừa học được phụ thuộc chéo giữa các biến.
 \end{alertblock}
 \end{frame}
 
@@ -193,17 +185,17 @@ hướng tiếp cận:
 
 \vspace{0.15cm}
 \begin{itemize}
-    \item \textbf{Xương sống dự báo theo đoạn:} phân đoạn theo chu kỳ, trích xuất $R$ thành phần cơ sở và dự báo theo
+    \item \textbf{Dự báo theo đoạn:} phân đoạn theo chu kỳ, trích xuất $R$ thành phần cơ sở và dự báo theo
           đoạn, kế thừa từ TimeBase\refnote{Huang2025TimeBase}.
 
     \item \textbf{Học phụ thuộc chéo trong không gian cơ sở:} đưa CrossVBlock với chiến lược DropFusion và IntraVBlock của
           DyTimeNet\refnote{Chen2026DyTimeNet} vào xử lý $P\cdot R$ hệ số cơ sở của mỗi biến, thay vì $L$ điểm thời gian.
 
-    \item \textbf{Hiệu chỉnh có kiểm soát:} nhánh trộn kênh chỉ cộng một lượng hiệu chỉnh vào các thành phần cơ sở, được
+    \item \textbf{Hiệu chỉnh có kiểm soát:} nhánh trộn biến chỉ cộng một lượng hiệu chỉnh vào các thành phần cơ sở, được
           khởi tạo bằng 0.
 
     \item \textbf{Đánh giá toàn diện:} 5 bộ dữ liệu, so sánh với 11 mô hình về độ chính xác và chi phí tính toán trên
-          \emph{cùng một thiết bị}, kèm nghiên cứu loại bỏ (ablation).
+          \emph{cùng một thiết bị}.
 \end{itemize}
 \end{frame}
 
@@ -260,7 +252,7 @@ hướng tiếp cận:
         \item \textbf{Sai số dự báo (MSE):}
         $$ \mathcal{L}_{MSE} = \frac{1}{S \times C} \sum_{t=1}^{S} \sum_{i=1}^{C} \left( x_{L+t}^{(i)} - \hat{x}_{L+t}^{(i)} \right)^2$$
 
-        \item \textbf{Hàm mục tiêu khi huấn luyện:} thêm ràng buộc trực giao trên các thành phần cơ sở (trình bày ở bước 3):
+        \item \textbf{Hàm mục tiêu khi huấn luyện:} thêm ràng buộc trực giao trên các thành phần cơ sở:
         $$\mathcal{L} = \mathcal{L}_{MSE} + \lambda_{orth}\,\mathcal{L}_{orth}, \qquad \lambda_{orth}\ge 0$$
     \end{itemize}
 \end{frame}
@@ -276,7 +268,7 @@ $P$ & Độ dài một đoạn (chu kỳ) & $24$ (một ngày) \\
 $N=\lceil L/P\rceil$ & Số đoạn quá khứ & $30$ ngày \\
 $N'=\lceil S/P\rceil$ & Số đoạn tương lai & $4$ ngày \\
 $R \ll N$ & Số thành phần cơ sở & $6$ \\
-$D$ & Số chiều ẩn của nhánh trộn kênh & $64$ \\
+$D$ & Số chiều ẩn của nhánh trộn biến & $64$ \\
 $C'=\lfloor 0.75\,C\rfloor$ & Số chiều nút thắt của CrossVBlock & $5$ \\
 $D_{ff}=2D$ & Số chiều ẩn của FFN trong IntraVBlock & $128$ \\
 \bottomrule
@@ -303,8 +295,6 @@ $D_{ff}=2D$ & Số chiều ẩn của FFN trong IntraVBlock & $128$ \\
     \item \textbf{Dự báo theo đoạn và khôi phục:} sinh $N'$ đoạn tương lai, cộng lại trung bình theo pha.
 \end{enumerate}
 
-\vspace{0.1cm}
-\small Các bước 1--3 và 8 xử lý \emph{từng biến riêng}; chỉ bước 5 trao đổi thông tin giữa các biến.
 \end{frame}
 
 \begin{frame}{1. Phân đoạn theo chu kỳ}
@@ -329,7 +319,7 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \end{itemize}
 \end{frame}
 
-\begin{frame}{2. Chuẩn hóa theo pha (Period Normalization)}
+\begin{frame}{2. Chuẩn hóa theo pha}
 \begin{itemize}
     \item \textbf{Trung bình theo pha:} trung bình của từng hàng (từng pha) qua $N$ đoạn:
     $$\mu^{(i)}_p = \frac{1}{N}\sum_{n=1}^{N}\big[\mathbf{X}^{(i)}\big]_{p,n},
@@ -337,12 +327,10 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 
     \item \textbf{Trừ trung bình:}
     $$\big[\tilde{\mathbf{X}}^{(i)}\big]_{p,n} = \big[\mathbf{X}^{(i)}\big]_{p,n} - \mu^{(i)}_p
-      \qquad\Longleftrightarrow\qquad \tilde{\mathbf{X}}^{(i)} = \mathbf{X}^{(i)} - \bm{\mu}^{(i)}\one_N^{\top}$$
+      \qquad (\text{trừ } \mu^{(i)}_p \text{ cho mọi phần tử của hàng } p)$$
 
     \item \textbf{Ý nghĩa:} $\bm{\mu}^{(i)}$ là ``đoạn trung bình'' của biến $i$ (ví dụ ban ngày phụ tải cao hơn ban đêm).
           Các bước sau chỉ học phần dao động quanh nó.
-    \item Khác RevIN\refnote{Kim2022RevIN} trong DyTimeNet: trừ trung bình \emph{theo từng pha}, không chia độ lệch chuẩn.
-          $\bm{\mu}^{(i)}$ được giữ lại để cộng trả ở bước cuối.
 \end{itemize}
 \end{frame}
 
@@ -350,7 +338,8 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \begin{itemize}
     \item Ánh xạ tuyến tính \textbf{dùng chung cho mọi biến} nén $N$ đoạn thành $R$ thành phần cơ sở
           ($\mathbf{W}_B\in\R^{N\times R}$, $\mathbf{b}_B\in\R^{R}$ học được):
-    $$\mathbf{E}^{(i)} = \tilde{\mathbf{X}}^{(i)}\,\mathbf{W}_B + \one_P\,\mathbf{b}_B^{\top} \quad\in\R^{P\times R}$$
+    $$\mathbf{E}^{(i)} = \tilde{\mathbf{X}}^{(i)}\,\mathbf{W}_B + \mathbf{b}_B \quad\in\R^{P\times R}
+      \qquad (\mathbf{b}_B \text{ cộng vào mọi hàng})$$
 
     \item \textbf{Cột thứ $r$ của $\mathbf{E}^{(i)}$} là tổ hợp tuyến tính của $N$ đoạn quá khứ
           $\tilde{\mathbf{x}}^{(i)}_n$, tức một ``đoạn đại diện'':
@@ -377,9 +366,6 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
     \item Chỉ dùng khi huấn luyện; khi đánh giá chỉ đo MSE và MAE.
 \end{itemize}
 
-\vspace{0.1cm}
-{\scriptsize Ghi chú: bài báo TimeBase viết $\|\cdot\|_F^2$; mô hình này cài đặt theo mã nguồn chính thức của TimeBase,
-dùng $\|\cdot\|_F$.}
 \end{frame}
 
 \begin{frame}{4. Mã hóa hệ số cơ sở (Basis Encoding)}
@@ -389,7 +375,8 @@ dùng $\|\cdot\|_F$.}
       \qquad \bar{\mathbf{E}} = \big[\mathbf{e}^{(1)},\dots,\mathbf{e}^{(C)}\big]\in\R^{PR\times C}$$
 
     \item \textbf{Mã hóa:} chiếu tuyến tính xuống không gian ẩn $D$ chiều:
-    $$\mathcal{X}_{enc} = \mathbf{W}_{enc}^{\top}\,\bar{\mathbf{E}} + \mathbf{b}_{enc}\one_C^{\top} \quad\in\R^{D\times C}$$
+    $$\mathcal{X}_{enc} = \mathbf{W}_{enc}^{\top}\,\bar{\mathbf{E}} + \mathbf{b}_{enc} \quad\in\R^{D\times C}
+      \qquad (\mathbf{b}_{enc} \text{ cộng vào mọi cột})$$
     \begin{itemize}
         \item $\mathbf{W}_{enc}\in\R^{PR\times D}$: ma trận trọng số có thể học; $\mathbf{b}_{enc}\in\R^{D}$: vector độ lệch.
     \end{itemize}
@@ -425,11 +412,11 @@ dùng $\|\cdot\|_F$.}
     $$\mathcal{X}'_{enc} = \operatorname{LN}(\mathcal{X}_{enc}) \quad \in \R^{D \times C}$$
 
     \item \textbf{MLP nút thắt trên trục biến} $C\to C'\to C$ (khi kiểm thử), với
-          $\mathbf{W}_{df,1}\in\R^{C\times C'}$, $\mathbf{W}_{df,2}\in\R^{C'\times C}$:
+          $\mathbf{W}_{df,1}\in\R^{C\times C'}$, $\mathbf{W}_{df,2}\in\R^{C'\times C}$ (độ lệch $\mathbf{b}_1$, $\mathbf{b}_2$ cộng vào mọi hàng):
     \begin{align*}
-      \mathbf{H} &= \text{GELU}\big(\mathcal{X}'_{enc}\,\mathbf{W}_{df,1} + \one_D\mathbf{b}_{1}^{\top}\big)
+      \mathbf{H} &= \text{GELU}\big(\mathcal{X}'_{enc}\,\mathbf{W}_{df,1} + \mathbf{b}_{1}\big)
                     &&\in\R^{D\times C'}\\
-      \mathcal{X}_{cross} &= \mathbf{H}\,\mathbf{W}_{df,2} + \one_D\mathbf{b}_{2}^{\top} &&\in\R^{D\times C}
+      \mathcal{X}_{cross} &= \mathbf{H}\,\mathbf{W}_{df,2} + \mathbf{b}_{2} &&\in\R^{D\times C}
     \end{align*}
 
     \item \textbf{Vì sao là trộn liên biến:} mỗi \emph{hàng} của $\mathcal{X}'_{enc}$ là một đặc trưng của cả $C$ biến.
@@ -440,18 +427,19 @@ dùng $\|\cdot\|_F$.}
 \end{frame}
 
 \begin{frame}{5a. DropFusion: Mặt nạ Cạnh $\mathcal{M}_1$ và Mặt nạ Nút $\mathcal{M}_2$}
-    Để loại bỏ các tương quan rác mang tính ngẫu nhiên, mỗi lớp tuyến tính trên trục biến (đầu vào
-    $\mathbf{Z}\in\R^{D\times C_{in}}$) được can thiệp bởi DropFusion khi huấn luyện:
+    Khi huấn luyện, hai lớp tuyến tính của CrossVBlock được can thiệp bởi DropFusion. Xét lớp thứ nhất
+    (đầu vào $\mathcal{X}'_{enc}\in\R^{D\times C}$, trọng số $\mathbf{W}_{df,1}\in\R^{C\times C'}$):
     \vspace{0.15cm}
     \begin{itemize}
-        \item \textbf{Giai đoạn 1 -- Mặt nạ Cạnh $\mathcal{M}_1\in\{0,1\}^{C_{in}\times C_{out}}$:} mỗi phần tử bằng 0 với xác
+        \item \textbf{Giai đoạn 1 -- Mặt nạ Cạnh $\mathcal{M}_1\in\{0,1\}^{C\times C'}$:} mỗi phần tử bằng 0 với xác
               suất $p_1$, tức tắt liên kết giữa một cặp biến. Lấy mẫu lại ở mỗi lô.
-        $$\mathbf{W}_{masked} = \mathbf{W}_{df} \odot \mathcal{M}_1$$
+        $$\mathbf{W}_{masked} = \mathbf{W}_{df,1} \odot \mathcal{M}_1$$
 
-        \item \textbf{Giai đoạn 2 -- Mặt nạ Nút $\mathcal{M}_2\in\{0,1\}^{D\times C_{out}}$:} mỗi phần tử bằng 0 với xác suất
+        \item \textbf{Giai đoạn 2 -- Mặt nạ Nút $\mathcal{M}_2\in\{0,1\}^{D\times C'}$:} mỗi phần tử bằng 0 với xác suất
               $p_2$, tức tắt đầu ra của một số biến. Lấy mẫu lại ở mỗi mẫu.
-        $$\mathbf{Y}_{masked} = \big(\mathbf{Z}\,\mathbf{W}_{masked} + \one_D\mathbf{b}^{\top}\big) \odot \mathcal{M}_2$$
+        $$\mathbf{Y}_{masked} = \big(\mathcal{X}'_{enc}\,\mathbf{W}_{masked} + \mathbf{b}_1\big) \odot \mathcal{M}_2$$
     \end{itemize}
+    \small Lớp thứ hai làm tương tự, với đầu vào $\mathbf{H}$ và trọng số $\mathbf{W}_{df,2}$.
 \end{frame}
 
 \IfFileExists{Mask.png}{%
@@ -471,13 +459,16 @@ dùng $\|\cdot\|_F$.}
     \end{itemize}
 
     \begin{alertblock}{Công thức DropFusion hoàn chỉnh (khi huấn luyện)}
-        $$\text{DF}(\mathbf{Z}) = \frac{1}{1-p_2}\left[\frac{\mathbf{Z}\,(\mathbf{W}_{df}\odot\mathcal{M}_1)}{1-p_1}
-          + \one_D\mathbf{b}^{\top}\right]\odot\mathcal{M}_2$$
+        $$\text{DF}(\mathcal{X}'_{enc}) = \frac{1}{1-p_2}\left[\frac{\mathcal{X}'_{enc}\,(\mathbf{W}_{df,1}\odot\mathcal{M}_1)}{1-p_1}
+          + \mathbf{b}_1\right]\odot\mathcal{M}_2$$
     \end{alertblock}
 
     \begin{itemize}
         \item \textbf{Khi kiểm thử:} $\mathcal{M}_1=\mathcal{M}_2=\one$, không nhân hệ số bù:
-              $\text{DF}(\mathbf{Z}) = \mathbf{Z}\,\mathbf{W}_{df} + \one_D\mathbf{b}^{\top}$.
+              $\text{DF}(\mathcal{X}'_{enc}) = \mathcal{X}'_{enc}\,\mathbf{W}_{df,1} + \mathbf{b}_1$
+              (đúng bằng lớp tuyến tính ở CrossVBlock).
+        \item Lớp thứ hai: thay $\mathcal{X}'_{enc}$ bằng $\mathbf{H}$, $\mathbf{W}_{df,1}$ bằng $\mathbf{W}_{df,2}$,
+              $\mathbf{b}_1$ bằng $\mathbf{b}_2$.
     \end{itemize}
 \end{frame}
 
@@ -501,7 +492,7 @@ dùng $\|\cdot\|_F$.}
 \begin{frame}{7. Chiếu ngược và Hiệu chỉnh thành phần cơ sở}
     \begin{itemize}
         \item \textbf{Chiếu ngược} về không gian cơ sở:
-        $$\Delta\bar{\mathbf{E}} = \mathbf{W}_{out}^{\top}\,\hat{\mathcal{X}}_{intra} + \mathbf{b}_{out}\one_C^{\top}
+        $$\Delta\bar{\mathbf{E}} = \mathbf{W}_{out}^{\top}\,\hat{\mathcal{X}}_{intra} + \mathbf{b}_{out}
           \quad\in\R^{PR\times C}, \qquad \mathbf{W}_{out}\in\R^{D\times PR}$$
 
         \item Cột $i$ được xếp lại thành $\Delta\mathbf{E}^{(i)}\in\R^{P\times R}$ và \textbf{cộng vào cơ sở}:
@@ -509,7 +500,7 @@ dùng $\|\cdot\|_F$.}
 
         \item \textbf{Khởi tạo bằng 0:} $\mathbf{W}_{out}=\mathbf{0}$, $\mathbf{b}_{out}=\mathbf{0}$ nên lúc bắt đầu huấn
               luyện $\Delta\mathbf{E}^{(i)}=\mathbf{0}$ và DyBAS-Net trùng với TimeBase.
-        \item \textbf{Ý nghĩa:} nhánh trộn kênh chỉ học \emph{phần hiệu chỉnh}: dùng thông tin của các biến khác để sửa các
+        \item \textbf{Ý nghĩa:} nhánh trộn biến chỉ học \emph{phần hiệu chỉnh}: dùng thông tin của các biến khác để sửa các
               ``ngày điển hình'' của biến $i$.
     \end{itemize}
 \end{frame}
@@ -517,11 +508,11 @@ dùng $\|\cdot\|_F$.}
 \begin{frame}{8. Dự báo theo đoạn và Khôi phục thang đo}
     \begin{itemize}
         \item \textbf{Dự báo theo đoạn:} ánh xạ tuyến tính dùng chung sinh $N'$ đoạn tương lai từ $R$ cơ sở đã hiệu chỉnh:
-        $$\hat{\mathbf{Y}}^{(i)} = \mathbf{E}'^{(i)}\,\mathbf{W}_F + \one_P\,\mathbf{b}_F^{\top} \quad\in\R^{P\times N'},
+        $$\hat{\mathbf{Y}}^{(i)} = \mathbf{E}'^{(i)}\,\mathbf{W}_F + \mathbf{b}_F \quad\in\R^{P\times N'},
           \qquad \mathbf{W}_F\in\R^{R\times N'}$$
 
         \item \textbf{Khôi phục thang đo:} cộng trả trung bình theo pha cho mọi đoạn tương lai:
-        $$\hat{\mathbf{Y}}'^{(i)} = \hat{\mathbf{Y}}^{(i)} + \bm{\mu}^{(i)}\one_{N'}^{\top}$$
+        $$\big[\hat{\mathbf{Y}}'^{(i)}\big]_{p,n} = \big[\hat{\mathbf{Y}}^{(i)}\big]_{p,n} + \mu^{(i)}_p$$
 
         \item \textbf{Ghép đoạn:} nối các cột thành chuỗi và giữ $S$ bước đầu:
         $$\hat{x}^{(i)}_{L+t} = \big[\hat{\mathbf{Y}}'^{(i)}\big]_{p,n},\quad t=(n-1)P+p,\ \ t=\overline{1,S}$$
@@ -533,7 +524,7 @@ dùng $\|\cdot\|_F$.}
     \includegraphics[width=\linewidth]{dytimebase_architecture.png}
 
     \vspace{0.05cm}
-    {\scriptsize Khối xanh: xương sống TimeBase (tuyến tính, độc lập kênh). Khối cam: nhánh trộn kênh trong không gian cơ sở
+    {\scriptsize Khối xanh: xương sống TimeBase (tuyến tính, độc lập biến). Khối cam: nhánh trộn biến trong không gian cơ sở
     (khối của DyTimeNet). Trong mã nguồn, mô hình có tên DyTimeBase.}
 \end{frame}
 
@@ -545,7 +536,7 @@ dùng $\|\cdot\|_F$.}
            b_{k+1} = b_k - \alpha \frac{\partial \mathcal{L}}{\partial b_k} \]
 
         \item \textbf{Hai tốc độ học:} $\alpha=\alpha_B$ cho xương sống ($\mathbf{W}_B,\mathbf{b}_B,\mathbf{W}_F,\mathbf{b}_F$),
-              $\alpha=\alpha_M$ cho nhánh trộn kênh.
+              $\alpha=\alpha_M$ cho nhánh trộn biến.
 
         \item \textbf{Lịch tốc độ học} theo epoch $e$: giữ nguyên 4 epoch đầu, sau đó nhân $0.8$ mỗi epoch:
         $\alpha^{(e)} = \alpha$ nếu $e\le 4$, \ $\alpha^{(e)} = \alpha\cdot 0.8^{\,e-4}$ nếu $e>4$.
@@ -560,10 +551,10 @@ dùng $\|\cdot\|_F$.}
     \begin{itemize}
         \item \textbf{Xương sống} (trích xuất cơ sở, dự báo theo đoạn): \
         $\text{MACs}_{B} = C\cdot P\cdot R\cdot(N+N')$
-        \item \textbf{Nhánh trộn kênh:}
+        \item \textbf{Nhánh trộn biến:}
         $$\text{MACs}_{M} = \underbrace{2\,C\,PR\,D}_{\text{mã hóa, chiếu ngược}}
           + \underbrace{2\,D\,C\,C'}_{\text{CrossVBlock}} + \underbrace{2\,C\,D\,D_{ff}}_{\text{IntraVBlock}}$$
-        \item Không có số hạng nào tỉ lệ với $L\cdot S$; nhánh trộn kênh không phụ thuộc $L$ và $S$.
+        \item Không có số hạng nào tỉ lệ với $L\cdot S$; nhánh trộn biến không phụ thuộc $L$ và $S$.
     \end{itemize}
 
     \begin{block}{Ví dụ Electricity: $C=321$, $L=S=720$, $P=24$, $R=6$, $D=64$}
@@ -602,7 +593,7 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 \begin{itemize}
     \item \textbf{Xương sống:} $P$, $R$, $\alpha_B$, kích thước lô, $\lambda_{orth}$ theo script chính thức của
           TimeBase\refnote{Huang2025TimeBase} cho từng bộ dữ liệu và từng $S$.
-    \item \textbf{Nhánh trộn kênh:} giữ nguyên $D$, $p_1$, $p_2$ đã tối ưu bằng Grid Search cho DyTimeNet trong
+    \item \textbf{Nhánh trộn biến:} giữ nguyên $D$, $p_1$, $p_2$ đã tối ưu bằng Grid Search cho DyTimeNet trong
           Đồ án~I; $\alpha_M = 5\cdot10^{-4}$. \emph{Không tinh chỉnh thêm} cho DyBAS-Net.
     \item Mỗi cấu hình chạy 3 seed (2021, 2022, 2023); báo cáo trung bình.
     \item \textbf{Thiết bị:} máy tính xách tay không GPU, CPU AMD Ryzen 7 7840HS (8 nhân), 16 GB RAM, PyTorch 2.6 (CPU).
@@ -619,7 +610,7 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 \footnotesize
 \begin{itemize}
     \item $P$, $R$ (và tốc độ học, kích thước lô, $\lambda_{orth}$) đổi theo $S$, đúng như script chính thức của TimeBase.
-    \item ``Riêng kênh'': Weather dùng $\mathbf{W}_B$, $\mathbf{W}_F$ riêng cho từng biến (số MACs không đổi).
+    \item ``Riêng biến'': Weather dùng $\mathbf{W}_B$, $\mathbf{W}_F$ riêng cho từng biến (số MACs không đổi).
     \item $D$, $p_1$, $p_2$: lấy nguyên từ Bảng 3.1 của Đồ án I; $C'=\lfloor 0.75\,C\rfloor$, $D_{ff}=2D$, Dropout $0.1$.
 \end{itemize}
 \end{frame}
@@ -627,7 +618,7 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 \begin{frame}{Các mô hình so sánh}
 \begin{itemize}
     \item \textbf{TimeBase$^{*}$}: TimeBase cài đặt lại theo mã nguồn chính thức (đầu ra lệch $<3\cdot10^{-7}$ so với bản
-          gốc khi cùng trọng số), chạy \emph{cùng quy trình} với DyBAS-Net. Hai mô hình chỉ khác nhau ở nhánh trộn kênh.
+          gốc khi cùng trọng số), chạy \emph{cùng quy trình} với DyBAS-Net. Hai mô hình chỉ khác nhau ở nhánh trộn biến.
 
     \vspace{0.15cm}
     \item \textbf{Số liệu công bố} ($L=720$, Table 10 của TimeBase \cite{Huang2025TimeBase}):
@@ -732,7 +723,7 @@ Hạng (\textbf{đậm}, \underline{gạch chân}) tính trên cả 13 mô hình
 \begin{frame}{So sánh với TimeBase trong cùng quy trình}
 \small
 Thay đổi MSE của DyBAS-Net so với TimeBase$^{*}$ (âm là tốt hơn). Hai mô hình dùng cùng xương sống, cùng siêu tham số
-xương sống, cùng 3 seed, chỉ khác ở nhánh trộn kênh:
+xương sống, cùng 3 seed, chỉ khác ở nhánh trộn biến:
 
 \vspace{0.15cm}
 \scriptsize
@@ -741,7 +732,7 @@ xương sống, cùng 3 seed, chỉ khác ở nhánh trộn kênh:
 \vspace{0.15cm}
 \small
 \begin{itemize}
-    \item Nhánh trộn kênh \textbf{cải thiện 3/5 bộ dữ liệu}: ETTh1 ($-1.8\%$), ETTh2 ($-1.3\%$), ETTm1 ($-4.5\%$).
+    \item Nhánh trộn biến \textbf{cải thiện 3/5 bộ dữ liệu}: ETTh1 ($-1.8\%$), ETTh2 ($-1.3\%$), ETTm1 ($-4.5\%$).
     \item Cải thiện lớn nhất ở dự báo ngắn: ETTm1 với $S=192$ giảm $9.6\%$.
     \item \textbf{ETTm2} kém hơn ($+3.7\%$): các lần chạy thường dừng sau 6--7 epoch, nhánh phi tuyến quá khớp trên chuỗi
           tương đối trơn.
@@ -796,7 +787,7 @@ Các biến thể ``bỏ khối'' chỉ dùng để kiểm chứng; mô hình đ
     \item Tính trung bình, \textbf{bản đầy đủ tốt hơn mọi bản đã bỏ khối}: bỏ CrossVBlock (0.3204), bỏ IntraVBlock (0.3209),
           bỏ cả nhánh (0.3228) so với 0.3193.
     \item \textbf{Weather} (21 biến): bỏ CrossVBlock cho kết quả kém nhất (0.2226); chỉ giữ CrossVBlock cho kết quả tốt nhất
-          (0.2186), tốt hơn TimeBase$^{*}$. Trộn kênh có ích hơn khi có nhiều biến.
+          (0.2186), tốt hơn TimeBase$^{*}$. Trộn biến có ích hơn khi có nhiều biến.
     \item Tăng $\alpha_M$ lên $2\cdot10^{-3}$ gần như không đổi (0.3189), nên giữ cấu hình của Đồ án I.
 \end{itemize}
 \end{frame}
@@ -812,7 +803,7 @@ Các biến thể ``bỏ khối'' chỉ dùng để kiểm chứng; mô hình đ
           nhanh hơn các mô hình Transformer từ 16 đến hàng nghìn lần.
     \item \textbf{Chính xác cạnh tranh:} tốt nhất trên ETTm1, thứ hai trên ETTh1 và Weather; vượt toàn bộ mô hình
           Transformer và DLinear; ngang ngửa SparseTSF, FITS, PatchTST.
-    \item \textbf{Nhánh trộn kênh có ích:} so với TimeBase cùng quy trình, giảm MSE trên 3/5 bộ dữ liệu (tới $4.5\%$ trên
+    \item \textbf{Nhánh trộn biến có ích:} so với TimeBase cùng quy trình, giảm MSE trên 3/5 bộ dữ liệu (tới $4.5\%$ trên
           ETTm1); ablation cho thấy cả CrossVBlock và IntraVBlock đều đóng góp.
 \end{itemize}
 \end{frame}
@@ -822,7 +813,7 @@ Các biến thể ``bỏ khối'' chỉ dùng để kiểm chứng; mô hình đ
     \item \textbf{Chưa vượt số công bố của TimeBase} về độ chính xác; kém các mô hình tuyến tính mạnh trên ETTh2, ETTm2.
     \item \textbf{Quá khớp trên dữ liệu trơn:} trên ETTm2, nhánh phi tuyến làm MSE tăng $3.7\%$ so với TimeBase.
     \item \textbf{Mức cải thiện nhỏ:} các chênh lệch trong ablation ($0.3$--$1.1\%$) cùng cỡ độ lệch chuẩn giữa các seed.
-    \item \textbf{Chậm hơn TimeBase} khoảng 2 lần, cái giá của nhánh trộn kênh.
+    \item \textbf{Chậm hơn TimeBase} khoảng 2 lần, cái giá của nhánh trộn biến.
     \item \textbf{Phạm vi đánh giá:} số liệu của 10 mô hình lớn là số trích dẫn; hiệu năng đo trên CPU (Max Mem là RAM,
           Epoch Time của mô hình lớn là ước tính từ một bước huấn luyện).
 \end{itemize}
