@@ -1,0 +1,670 @@
+% Phương pháp luận (Chương 2) và Thực nghiệm (Chương 3) của DyTimeBase, viết theo form Đồ án I.
+% Biên dịch thử từ thư mục docs/: pdflatex dytimebase_phuong_phap_luan.tex (chạy 2 lần).
+% Các bảng ở docs/tables/ sinh tự động từ results/*.json bằng: python scripts/make_report_tables.py
+\documentclass[12pt,a4paper]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs,array,graphicx,float,multirow,rotating}
+\renewcommand{\chaptername}{Chương}
+\renewcommand{\tablename}{Bảng}
+\renewcommand{\figurename}{Hình}
+\renewcommand{\bibname}{Tài liệu tham khảo}
+\setlength{\emergencystretch}{2em}
+\numberwithin{equation}{chapter}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\one}{\mathbf{1}}
+\newcommand{\LN}{\operatorname{LayerNorm}}
+\newcommand{\GELU}{\operatorname{GELU}}
+\newcommand{\DF}{\operatorname{DF}}
+\newcommand{\FFN}{\operatorname{FFN}}
+\newcommand{\vecr}{\operatorname{vec}}
+
+\begin{document}
+\setcounter{chapter}{1}
+\chapter{Phương pháp luận}
+
+Chương này trình bày nền tảng toán học của bài toán dự báo chuỗi thời gian đa biến và cấu trúc của mô hình
+\textbf{DyTimeBase}. DyTimeBase giữ nguyên xương sống tuyến tính, độc lập kênh của TimeBase (rút một số ít
+\emph{chuỗi cơ sở} từ các đoạn theo chu kỳ, rồi dự báo theo đoạn), và bổ sung một nhánh \emph{trộn kênh} lấy từ
+DyTimeNet (khối CrossVBlock với chiến lược DropFusion và khối IntraVBlock). Điểm khác biệt cốt lõi là nhánh trộn kênh
+hoạt động trên \emph{không gian cơ sở} gồm $P\cdot R$ số mỗi kênh, thay vì trên toàn bộ $L$ điểm của chuỗi gốc.
+
+%=====================================================================
+\section{Mô hình hóa toán học}
+
+\subsection{Dữ liệu đầu vào}
+
+Xét một hệ thống quan sát gồm $C$ biến số thay đổi theo thời gian. Một mẫu đầu vào là cửa sổ lịch sử độ dài $L$:
+\begin{equation}
+\mathcal{X}_{train} =
+\begin{bmatrix}
+x^{(1)}_1 & x^{(2)}_1 & \dots & x^{(C)}_1\\
+\vdots & \vdots & \ddots & \vdots\\
+x^{(1)}_L & x^{(2)}_L & \dots & x^{(C)}_L
+\end{bmatrix} \in \R^{L\times C},
+\qquad \mathbf{x}^{(i)} = \big(x^{(i)}_1,\dots,x^{(i)}_L\big)^{\!\top}\in\R^{L},
+\label{eq:input}
+\end{equation}
+trong đó $x^{(i)}_t$ là giá trị của biến $X^{(i)}$ tại thời điểm $t$, đã được chuẩn hóa Z-score theo từng biến với
+trung bình và độ lệch chuẩn tính trên tập huấn luyện. Nhãn tương ứng là $S$ bước tương lai:
+\begin{equation}
+\mathcal{X}_{test} =
+\begin{bmatrix}
+x^{(1)}_{L+1} & \dots & x^{(C)}_{L+1}\\
+\vdots & \ddots & \vdots\\
+x^{(1)}_{L+S} & \dots & x^{(C)}_{L+S}
+\end{bmatrix} \in \R^{S\times C}.
+\label{eq:label}
+\end{equation}
+
+Ngoài $L$, $S$, $C$, mô hình dùng thêm các kích thước sau:
+\begin{itemize}
+  \item $P$: độ dài đoạn, bằng chu kỳ tự nhiên của dữ liệu (ví dụ $P=24$ với dữ liệu theo giờ có chu kỳ ngày).
+  \item $N=\lceil L/P\rceil$ và $N'=\lceil S/P\rceil$: số đoạn của quá khứ và của tương lai.
+  \item $R\ll N$: số chuỗi cơ sở (basis).
+  \item $D$: số chiều ẩn của nhánh trộn kênh; $C'=\lfloor 0.75\,C\rfloor$: số chiều nút thắt của CrossVBlock;
+        $D_{ff}=2D$: số chiều ẩn của FFN trong IntraVBlock.
+\end{itemize}
+
+\subsection{Đầu ra và Hàm mục tiêu}
+
+Mô hình $\mathcal{F}$ (với tập tham số $\Theta$) nhận $\mathcal{X}_{train}$ và ước lượng đồng thời
+$S$ bước tương lai của cả $C$ biến:
+\begin{equation}
+\hat{\mathcal{X}} = \mathcal{F}(\mathcal{X}_{train}) \in \R^{S\times C}.
+\label{eq:model}
+\end{equation}
+
+Sai số dự báo được đo bằng trung bình bình phương sai số:
+\begin{equation}
+\mathcal{L}_{MSE} = \frac{1}{S\times C}\sum_{t=1}^{S}\sum_{i=1}^{C}\Big(x^{(i)}_{L+t}-\hat{x}^{(i)}_{L+t}\Big)^2 .
+\label{eq:mse}
+\end{equation}
+
+Khác với DyTimeNet, hàm mục tiêu khi huấn luyện DyTimeBase có thêm một số hạng điều chuẩn trực giao
+$\mathcal{L}_{orth}$ trên các chuỗi cơ sở. Số hạng này được định nghĩa ở mục~\ref{sec:basis}, công
+thức~\eqref{eq:orth}:
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{MSE} + \lambda_{orth}\,\mathcal{L}_{orth},
+\label{eq:objective}
+\end{equation}
+trong đó $\lambda_{orth}\ge 0$ là siêu tham số. $\mathcal{L}_{orth}$ chỉ dùng khi huấn luyện; khi đánh giá, mô hình
+chỉ được đo bằng MSE và MAE.
+
+%=====================================================================
+\section{Tổng quan kiến trúc của mô hình}
+
+Hình~\ref{fig:dytimebase} mô tả luồng dữ liệu của DyTimeBase. Mỗi mẫu đi qua các khối sau:
+\begin{enumerate}
+  \item \textbf{Phân đoạn}: chuỗi độ dài $L$ của mỗi kênh được cắt thành $N$ đoạn dài $P$, xếp thành ma trận
+        $P\times N$ (hàng là pha trong chu kỳ, cột là đoạn).
+  \item \textbf{Chuẩn hóa theo pha}: trừ trung bình của từng pha, tính trên $N$ đoạn.
+  \item \textbf{Trích xuất cơ sở}: một ánh xạ tuyến tính $N\to R$ nén $N$ đoạn thành $R$ chuỗi cơ sở,
+        cho ma trận $\mathbf{E}^{(i)}\in\R^{P\times R}$.
+  \item \textbf{Trộn kênh trong không gian cơ sở}, gồm bốn bước:
+        mã hóa $P\cdot R\to D$, CrossVBlock (trộn $C$ kênh với DropFusion), IntraVBlock (FFN theo từng kênh), và chiếu
+        ngược $D\to P\cdot R$ (khởi tạo bằng 0) để ra phần hiệu chỉnh $\Delta\mathbf{E}^{(i)}$.
+  \item \textbf{Dự báo theo đoạn}: một ánh xạ tuyến tính $R\to N'$ trên
+        $\mathbf{E}'^{(i)}=\mathbf{E}^{(i)}+\Delta\mathbf{E}^{(i)}$.
+  \item \textbf{Khôi phục và ghép}: cộng lại trung bình theo pha, trải $N'$ đoạn thành chuỗi và lấy $S$ bước đầu.
+\end{enumerate}
+
+\begin{figure}[ht]
+  \centering
+  % \includegraphics[width=\textwidth]{dytimebase.png}
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}(Sơ đồ kiến trúc DyTimeBase)\vspace{2cm}}}
+  \caption{Overview Pipeline của mô hình DyTimeBase}
+  \label{fig:dytimebase}
+\end{figure}
+
+Mọi phép biến đổi theo trục thời gian đều chạy trên các kích thước $N$, $R$, $P$ (cỡ vài chục) thay vì $L$, $S$
+(cỡ hàng trăm). Phần trộn kênh chạy trên vector $D$ chiều của mỗi kênh. Vì vậy chi phí tính toán thấp hơn nhiều
+so với DyTimeNet (mục~\ref{sec:complexity}).
+
+%=====================================================================
+\section{Xây dựng mô hình DyTimeBase}
+
+Các khối từ~\ref{sec:segment} đến~\ref{sec:basis} và khối~\ref{sec:forecast} áp dụng \emph{độc lập cho từng kênh}
+$i=1,\dots,C$. Chỉ khối~\ref{sec:mixing} trao đổi thông tin giữa các kênh.
+
+\subsection{Phân đoạn theo chu kỳ và Chuẩn hóa theo pha}
+\label{sec:segment}
+
+\textbf{a) Phân đoạn.} Khi $L$ không chia hết cho $P$, chuỗi được đệm thêm $\delta=NP-L$ giá trị ở đầu, lấy từ đoạn
+đầu tiên:
+\begin{equation}
+\bar{\mathbf{x}}^{(i)} = \big(x^{(i)}_{P-\delta+1},\dots,x^{(i)}_{P},\;x^{(i)}_1,\dots,x^{(i)}_L\big)^{\!\top}\in\R^{NP}
+\label{eq:pad}
+\end{equation}
+($\delta=0$ thì $\bar{\mathbf{x}}^{(i)}=\mathbf{x}^{(i)}$). Chuỗi sau đó được xếp thành ma trận đoạn
+$\mathbf{X}^{(i)}\in\R^{P\times N}$, mỗi cột là một đoạn dài $P$:
+\begin{equation}
+\big[\mathbf{X}^{(i)}\big]_{p,n} = \bar{x}^{(i)}_{(n-1)P+p},\qquad p=1,\dots,P,\; n=1,\dots,N.
+\label{eq:segment}
+\end{equation}
+Hàng $p$ của $\mathbf{X}^{(i)}$ gom các giá trị cùng pha $p$ trong chu kỳ (ví dụ cùng giờ trong ngày) của $N$ chu kỳ
+liên tiếp.
+
+\textbf{b) Chuẩn hóa theo pha (Period Normalization).} Mỗi pha có mức trung bình riêng (ví dụ ban ngày phụ tải
+cao hơn ban đêm), nên mô hình trừ trung bình của từng pha:
+\begin{equation}
+\bm{\mu}^{(i)} = \frac{1}{N}\,\mathbf{X}^{(i)}\one_N \in\R^{P},\qquad
+\tilde{\mathbf{X}}^{(i)} = \mathbf{X}^{(i)} - \bm{\mu}^{(i)}\one_N^{\top}\in\R^{P\times N}.
+\label{eq:period-norm}
+\end{equation}
+\textbf{Tác dụng và ý nghĩa:} Phép trừ này tách mẫu hình lặp lại trong một chu kỳ ra khỏi chuỗi, để các khối phía sau
+chỉ phải học phần dao động quanh mẫu hình đó. Bước này đóng vai trò tương tự RevIN trong DyTimeNet nhưng không chia
+cho độ lệch chuẩn. $\bm{\mu}^{(i)}$ được giữ lại để cộng trả ở bước cuối~\eqref{eq:denorm}.
+
+\subsection{Khối Trích xuất cơ sở (Basis Extraction)}
+\label{sec:basis}
+
+Một ánh xạ tuyến tính dùng chung cho mọi kênh nén $N$ đoạn thành $R$ chuỗi cơ sở:
+\begin{equation}
+\mathbf{E}^{(i)} = \tilde{\mathbf{X}}^{(i)}\mathbf{W}_B + \one_P\mathbf{b}_B^{\top}\in\R^{P\times R},
+\qquad \mathbf{W}_B\in\R^{N\times R},\;\mathbf{b}_B\in\R^{R}.
+\label{eq:basis}
+\end{equation}
+Cột thứ $r$ của $\mathbf{E}^{(i)}$ là $\sum_{n=1}^{N}[\mathbf{W}_B]_{n,r}\,\tilde{\mathbf{X}}^{(i)}_{:,n}+[\mathbf{b}_B]_r$,
+tức một tổ hợp tuyến tính của $N$ đoạn quá khứ. Mỗi cột vì thế là một ``đoạn đại diện'' độ dài $P$, và cả cửa sổ
+$L$ điểm được tóm tắt bằng $R$ đoạn đại diện như vậy.
+
+\textbf{Ràng buộc trực giao.} Để $R$ chuỗi cơ sở mang thông tin khác nhau và không trùng lặp, mô hình phạt các tích
+vô hướng giữa hai chuỗi cơ sở khác nhau. Gọi $\mathbf{G}^{(i)}=\mathbf{E}^{(i)\top}\mathbf{E}^{(i)}\in\R^{R\times R}$
+là ma trận Gram. Với một lô gồm $B$ mẫu:
+\begin{equation}
+\mathcal{L}_{orth} = \frac{1}{B\,C}\sum_{b=1}^{B}\sum_{i=1}^{C}
+\Big\|\mathbf{G}^{(i)}_b - \operatorname{diag}\big(\mathbf{G}^{(i)}_b\big)\Big\|_F ,
+\label{eq:orth}
+\end{equation}
+trong đó $\operatorname{diag}(\cdot)$ giữ lại đường chéo và $\|\cdot\|_F$ là chuẩn Frobenius. Số hạng này đạt giá
+trị nhỏ nhất bằng 0 khi các cột của $\mathbf{E}^{(i)}$ đôi một trực giao.
+
+\subsection{Khối Trộn kênh trong không gian cơ sở}
+\label{sec:mixing}
+
+Các khối trước xử lý từng kênh riêng rẽ. Khối này cho các kênh trao đổi thông tin. Chỉ hai khối CrossVBlock (cùng
+DropFusion) và IntraVBlock được giữ nguyên từ DyTimeNet. Hai lớp bao quanh chúng là thiết kế mới của DyTimeBase:
+\begin{itemize}
+  \item Lớp mã hóa $PR\to D$ thay cho phép chiếu thời gian $L\to D$ của DyTimeNet. Nó nhận các chuỗi cơ sở
+        $\mathbf{E}^{(i)}$ ($P\cdot R$ số mỗi kênh) thay vì chuỗi gốc ($L$ số mỗi kênh).
+  \item Lớp chiếu ngược $D\to PR$, khởi tạo bằng 0, thay cho lớp chiếu ra $D\to S$ của DyTimeNet.
+\end{itemize}
+
+\textbf{a) Làm phẳng và Mã hóa.} Mỗi ma trận cơ sở được làm phẳng theo hàng,
+$\mathbf{e}^{(i)}=\vecr(\mathbf{E}^{(i)})\in\R^{PR}$ với $[\mathbf{e}^{(i)}]_{(p-1)R+r}=[\mathbf{E}^{(i)}]_{p,r}$.
+Các vector này được ghép thành $\bar{\mathbf{E}}=[\mathbf{e}^{(1)},\dots,\mathbf{e}^{(C)}]\in\R^{PR\times C}$ rồi chiếu
+xuống không gian ẩn $D$ chiều. Phép biến đổi này cùng dạng với phép mã hóa thời gian
+$\mathcal{X}_{enc}=\mathbf{W}_{enc}^{\top}\mathcal{X}'+\mathbf{b}_{enc}$ của DyTimeNet (Đồ án I, công thức (2.6)), nhưng
+đầu vào là $PR$ hệ số cơ sở thay cho $L$ điểm:
+\begin{equation}
+\mathcal{X}_{enc} = \mathbf{W}_{enc}^{\top}\bar{\mathbf{E}} + \mathbf{b}_{enc}\one_C^{\top}\in\R^{D\times C},
+\qquad \mathbf{W}_{enc}\in\R^{PR\times D},\;\mathbf{b}_{enc}\in\R^{D}.
+\label{eq:embed}
+\end{equation}
+
+\textbf{b) Khối Liên biến CrossVBlock với DropFusion.} Đầu tiên, $\mathcal{X}_{enc}$ được chuẩn hóa LayerNorm theo
+từng cột (từng kênh, trên $D$ đặc trưng):
+\begin{equation}
+\mathcal{X}'_{enc} = \LN(\mathcal{X}_{enc})\in\R^{D\times C}.
+\label{eq:ln-cross}
+\end{equation}
+\textbf{Tác dụng và ý nghĩa:} LayerNorm đưa biểu diễn của mọi kênh về cùng thang đo, để phép trộn kênh phía sau không
+bị chi phối bởi các kênh có biên độ lớn.
+
+Phép trộn kênh dùng hàm kích hoạt GELU:
+\begin{equation}
+\GELU(x) = x\cdot\Phi(x) = \frac{x}{2}\left(1+\operatorname{erf}\left(\frac{x}{\sqrt{2}}\right)\right),
+\label{eq:gelu}
+\end{equation}
+với $\Phi(x)$ là hàm phân phối tích lũy của phân phối chuẩn $\mathcal{N}(0,1)$.
+
+Mỗi lớp tuyến tính trên trục kênh được thay bằng lớp DropFusion. Với đầu vào $\mathbf{Z}\in\R^{D\times C_{in}}$ và tham
+số $\mathbf{W}_{df}\in\R^{C_{in}\times C_{out}}$, $\mathbf{b}_{df}\in\R^{C_{out}}$, đầu tiên mặt nạ cạnh được áp lên
+ma trận trọng số:
+\begin{equation}
+\mathbf{W}_{masked} = \mathbf{W}_{df}\odot\mathcal{M}_1 ,
+\label{eq:wmasked}
+\end{equation}
+sau đó mặt nạ nút được áp lên đầu ra, kèm các hệ số bù năng lượng:
+\begin{equation}
+\DF(\mathbf{Z};\mathbf{W}_{df},\mathbf{b}_{df}) = \frac{1}{1-p_2}\left[\frac{\mathbf{Z}\,\mathbf{W}_{masked}}{1-p_1}
++ \one_D\mathbf{b}_{df}^{\top}\right]\odot\mathcal{M}_2 ,
+\label{eq:dropfusion}
+\end{equation}
+trong đó:
+\begin{itemize}
+  \item $\mathcal{M}_1\in\{0,1\}^{C_{in}\times C_{out}}$ là \emph{mặt nạ cạnh}. Mỗi phần tử bằng 0 với xác suất $p_1$,
+        tức là cắt liên kết giữa một cặp kênh. Mặt nạ được lấy mẫu lại ở mỗi lô.
+  \item $\mathcal{M}_2\in\{0,1\}^{D\times C_{out}}$ là \emph{mặt nạ nơ-ron}. Mỗi phần tử bằng 0 với xác suất $p_2$, tức
+        là tắt đầu ra. Mặt nạ được lấy mẫu lại ở mỗi mẫu.
+  \item Các hệ số $\frac{1}{1-p_1}$ và $\frac{1}{1-p_2}$ giữ cho kỳ vọng của tín hiệu không đổi giữa lúc huấn luyện và
+        lúc kiểm thử.
+\end{itemize}
+Khi kiểm thử, $\mathcal{M}_1=\mathcal{M}_2=\one$, không nhân hệ số bù, và lớp trở thành
+$\DF(\mathbf{Z})=\mathbf{Z}\mathbf{W}_{df}+\one_D\mathbf{b}_{df}^{\top}$.
+
+CrossVBlock gồm hai lớp DropFusion theo cấu trúc nút thắt $C\to C'\to C$ (tham số
+$\mathbf{W}_{df,1}\in\R^{C\times C'}$, $\mathbf{W}_{df,2}\in\R^{C'\times C}$), xen giữa là GELU:
+\begin{equation}
+\mathcal{X}_{cross} = \DF\Big(\GELU\big(\DF(\mathcal{X}'_{enc};\mathbf{W}_{df,1},\mathbf{b}_{df,1})\big);
+\mathbf{W}_{df,2},\mathbf{b}_{df,2}\Big)\in\R^{D\times C}.
+\label{eq:cross}
+\end{equation}
+Mỗi hàng của $\mathcal{X}'_{enc}$ là một đặc trưng (trong $D$ đặc trưng) của cả $C$ kênh. Phép nhân phải với
+$\mathbf{W}_{df,1}$, $\mathbf{W}_{df,2}$ trộn thông tin \emph{giữa các kênh} trên từng đặc trưng đó.
+
+\textbf{c) Khối Nội biến IntraVBlock.} Như DyTimeNet, một kết nối thặng dư cộng đặc trưng chéo với đặc trưng đã chuẩn
+hóa, để thông tin gốc của từng kênh không bị mất:
+\begin{equation}
+\mathcal{X}_{intra} = \mathcal{X}_{cross} + \mathcal{X}'_{enc}\in\R^{D\times C}.
+\label{eq:cross-res}
+\end{equation}
+Sau đó một mạng FFN hai lớp dùng chung được quét dọc theo từng kênh (từng cột), có LayerNorm phía trước và kết nối
+thặng dư:
+\begin{align}
+\FFN(\mathbf{Z}) &= \Big(\operatorname{Drop}\big(\GELU(\mathbf{Z}^{\top}\mathbf{W}_1+\one_C\mathbf{b}_1^{\top})\big)\mathbf{W}_2
++ \one_C\mathbf{b}_2^{\top}\Big)^{\!\top}\in\R^{D\times C},
+\label{eq:ffn}\\
+\hat{\mathcal{X}}_{intra} &= \mathcal{X}_{intra} + \operatorname{Drop}\Big(\FFN\big(\LN(\mathcal{X}_{intra})\big)\Big)
+\in\R^{D\times C},
+\label{eq:intra}
+\end{align}
+trong đó $\mathbf{W}_1\in\R^{D\times D_{ff}}$, $\mathbf{W}_2\in\R^{D_{ff}\times D}$, và $\operatorname{Drop}$ là
+Dropout thông thường với tỉ lệ $p_{drop}$. Phép chuyển vị $\mathbf{Z}^{\top}\in\R^{C\times D}$ đặt mỗi kênh thành một
+hàng, nên $\mathbf{W}_1$, $\mathbf{W}_2$ chỉ biến đổi trên $D$ đặc trưng của từng kênh, không trộn các kênh.
+
+\textbf{d) Chiếu ngược và Hiệu chỉnh cơ sở.} Biểu diễn ẩn được chiếu trở lại không gian cơ sở:
+\begin{equation}
+\Delta\bar{\mathbf{E}} = \mathbf{W}_{out}^{\top}\hat{\mathcal{X}}_{intra} + \mathbf{b}_{out}\one_C^{\top}\in\R^{PR\times C},
+\qquad \mathbf{W}_{out}\in\R^{D\times PR}.
+\label{eq:proj}
+\end{equation}
+Cột thứ $i$ được xếp lại thành $\Delta\mathbf{E}^{(i)}\in\R^{P\times R}$ (phép ngược của $\vecr$), rồi cộng vào cơ sở
+ban đầu:
+\begin{equation}
+\mathbf{E}'^{(i)} = \mathbf{E}^{(i)} + \Delta\mathbf{E}^{(i)}.
+\label{eq:basis-update}
+\end{equation}
+\textbf{Tác dụng và ý nghĩa:} $\mathbf{W}_{out}$ và $\mathbf{b}_{out}$ được khởi tạo bằng 0, nên ở thời điểm khởi tạo
+$\Delta\mathbf{E}^{(i)}=\mathbf{0}$ và DyTimeBase trùng khớp với TimeBase. Trong quá trình huấn luyện, nhánh trộn kênh
+chỉ thêm vào phần hiệu chỉnh nào giúp giảm sai số. Nhờ vậy mô hình không bắt đầu từ một mức tệ hơn xương sống độc
+lập kênh.
+
+\subsection{Khối Dự báo theo đoạn và Khôi phục thang đo}
+\label{sec:forecast}
+
+\textbf{a) Dự báo theo đoạn.} Một ánh xạ tuyến tính dùng chung sinh ra $N'$ đoạn tương lai từ $R$ chuỗi cơ sở đã
+hiệu chỉnh:
+\begin{equation}
+\hat{\mathbf{Y}}^{(i)} = \mathbf{E}'^{(i)}\mathbf{W}_F + \one_P\mathbf{b}_F^{\top}\in\R^{P\times N'},
+\qquad \mathbf{W}_F\in\R^{R\times N'},\;\mathbf{b}_F\in\R^{N'}.
+\label{eq:forecast}
+\end{equation}
+
+\textbf{b) Khôi phục thang đo.} Trung bình theo pha ở~\eqref{eq:period-norm} được cộng trả lại cho mọi đoạn tương
+lai:
+\begin{equation}
+\hat{\mathbf{Y}}'^{(i)} = \hat{\mathbf{Y}}^{(i)} + \bm{\mu}^{(i)}\one_{N'}^{\top}.
+\label{eq:denorm}
+\end{equation}
+
+\textbf{c) Ghép đoạn.} Các cột được nối tiếp nhau thành chuỗi, và mô hình giữ lại $S$ bước đầu:
+\begin{equation}
+\hat{x}^{(i)}_{L+t} = \big[\hat{\mathbf{Y}}'^{(i)}\big]_{p,n}\quad\text{với } t=(n-1)P+p,\; t=1,\dots,S,
+\qquad
+\hat{\mathcal{X}} = \big[\hat{x}^{(i)}_{L+t}\big]_{t,i}\in\R^{S\times C}.
+\label{eq:merge}
+\end{equation}
+
+\subsection{Huấn luyện mô hình}
+\label{sec:training}
+
+Tham số được chia thành hai nhóm:
+\begin{itemize}
+  \item Xương sống $\Theta_B=\{\mathbf{W}_B,\mathbf{b}_B,\mathbf{W}_F,\mathbf{b}_F\}$.
+  \item Nhánh trộn kênh $\Theta_M$: các tham số của~\eqref{eq:embed}--\eqref{eq:proj}, gồm cả tham số của các lớp
+        LayerNorm.
+\end{itemize}
+Cả hai nhóm được tối ưu đồng thời theo hàm mục tiêu~\eqref{eq:objective} bằng thuật toán Adam. Mỗi nhóm có một tốc
+độ học riêng: $\alpha_B$ cho xương sống và $\alpha_M$ cho nhánh trộn kênh. Với $\mathbf{g}_k=\nabla_{\theta}\mathcal{L}$
+tại bước $k$:
+\begin{equation}
+\mathbf{m}_k=\beta_1\mathbf{m}_{k-1}+(1-\beta_1)\mathbf{g}_k,\quad
+\mathbf{v}_k=\beta_2\mathbf{v}_{k-1}+(1-\beta_2)\mathbf{g}_k^{2},\quad
+\theta_{k+1}=\theta_k-\alpha\,\frac{\mathbf{m}_k/(1-\beta_1^{k})}{\sqrt{\mathbf{v}_k/(1-\beta_2^{k})}+\epsilon},
+\label{eq:adam}
+\end{equation}
+trong đó $\alpha=\alpha_B$ nếu $\theta\in\Theta_B$ và $\alpha=\alpha_M$ nếu $\theta\in\Theta_M$.
+
+Tốc độ học giữ nguyên trong 4 epoch đầu, sau đó giảm theo cấp số nhân với hệ số $0.8$ mỗi epoch. Lịch này áp dụng
+cho cả hai nhóm:
+\begin{equation}
+\alpha^{(e)} = \begin{cases}\alpha, & e\le 4,\\ \alpha\cdot 0.8^{\,e-4}, & e>4,\end{cases}
+\qquad e=1,2,\dots
+\label{eq:lr-schedule}
+\end{equation}
+Huấn luyện chạy tối đa 30 epoch và dừng sớm nếu MSE trên tập Validation không giảm sau 5 epoch liên tiếp. Trọng số
+có MSE Validation thấp nhất được dùng để đánh giá trên tập Test.
+
+\subsection{Độ phức tạp tính toán}
+\label{sec:complexity}
+
+Số phép nhân--cộng (MACs) cho một mẫu là tổng của hai phần.
+
+Xương sống, gồm~\eqref{eq:basis} và~\eqref{eq:forecast}:
+\begin{equation}
+\text{MACs}_{B} = C\,P\,R\,(N+N').
+\label{eq:macs-backbone}
+\end{equation}
+
+Nhánh trộn kênh, gồm mã hóa và chiếu ngược, CrossVBlock và IntraVBlock:
+\begin{equation}
+\text{MACs}_{M} = \underbrace{2\,C\,PR\,D}_{\text{mã hóa, chiếu ngược}}
++ \underbrace{2\,D\,C\,C'}_{\text{CrossVBlock}}
++ \underbrace{2\,C\,D\,D_{ff}}_{\text{IntraVBlock}} .
+\label{eq:macs-mix}
+\end{equation}
+
+Ví dụ với $C=321$, $L=S=720$, $P=24$ ($N=N'=30$), $R=6$, $D=64$, $C'=240$, $D_{ff}=128$:
+\begin{itemize}
+  \item Xương sống: $\text{MACs}_B\approx 2.8$M.
+  \item Nhánh trộn kênh: $\text{MACs}_M\approx 5.9\text{M}+9.9\text{M}+5.3\text{M}$.
+  \item Tổng cộng: khoảng $23.8$M MACs.
+\end{itemize}
+Để so sánh, DLinear cần $2CLS\approx 333$M MACs.
+
+\subsection{Tóm tắt luồng dữ liệu}
+
+\begin{table}[ht]
+\centering
+\caption{Kích thước dữ liệu qua từng khối của DyTimeBase (một mẫu)}
+\label{tab:shapes}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+Khối & Phép biến đổi & Đầu ra & Công thức\\
+\midrule
+Input & -- & $\mathcal{X}_{train}\in\R^{L\times C}$ & \eqref{eq:input}\\
+Phân đoạn & đệm, xếp $P\times N$ & $\mathbf{X}^{(i)}\in\R^{P\times N}$ & \eqref{eq:pad}, \eqref{eq:segment}\\
+Chuẩn hóa theo pha & trừ $\bm{\mu}^{(i)}$ & $\tilde{\mathbf{X}}^{(i)}\in\R^{P\times N}$ & \eqref{eq:period-norm}\\
+Trích xuất cơ sở & Linear $N\to R$ & $\mathbf{E}^{(i)}\in\R^{P\times R}$ & \eqref{eq:basis}, \eqref{eq:orth}\\
+Mã hóa & Linear $PR\to D$ & $\mathcal{X}_{enc}\in\R^{D\times C}$ & \eqref{eq:embed}\\
+CrossVBlock & LN, DF $C\to C'\to C$ & $\mathcal{X}_{cross}\in\R^{D\times C}$ & \eqref{eq:ln-cross}--\eqref{eq:cross}\\
+IntraVBlock & thặng dư, LN, FFN $D\to 2D\to D$ & $\hat{\mathcal{X}}_{intra}\in\R^{D\times C}$ & \eqref{eq:cross-res}--\eqref{eq:intra}\\
+Chiếu ngược & Linear $D\to PR$ (khởi tạo 0) & $\mathbf{E}'^{(i)}\in\R^{P\times R}$ & \eqref{eq:proj}, \eqref{eq:basis-update}\\
+Dự báo theo đoạn & Linear $R\to N'$ & $\hat{\mathbf{Y}}^{(i)}\in\R^{P\times N'}$ & \eqref{eq:forecast}\\
+Khôi phục, ghép & cộng $\bm{\mu}^{(i)}$, trải phẳng & $\hat{\mathcal{X}}\in\R^{S\times C}$ & \eqref{eq:denorm}, \eqref{eq:merge}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Các biến thể}
+
+\begin{itemize}
+  \item \textbf{Tham số riêng từng kênh} (\emph{individual}): thay $\mathbf{W}_B$, $\mathbf{b}_B$, $\mathbf{W}_F$, $\mathbf{b}_F$
+        bằng $\mathbf{W}^{(i)}_B$, $\mathbf{b}^{(i)}_B$, $\mathbf{W}^{(i)}_F$, $\mathbf{b}^{(i)}_F$ cho từng kênh $i$. Số MACs
+        không đổi, chỉ số tham số của xương sống tăng $C$ lần. Biến thể này dùng cho bộ dữ liệu Weather.
+  \item \textbf{Chuẩn hóa toàn cửa sổ}: thay $\bm{\mu}^{(i)}$ trong~\eqref{eq:period-norm} bằng một trung bình vô hướng
+        $\mu^{(i)}=\frac{1}{NP}\one_P^{\top}\mathbf{X}^{(i)}\one_N$.
+  \item \textbf{Bỏ nhánh trộn kênh}: bỏ các bước từ~\eqref{eq:embed} đến~\eqref{eq:basis-update}, tức
+        $\mathbf{E}'^{(i)}=\mathbf{E}^{(i)}$. Khi đó mô hình đúng bằng TimeBase.
+\end{itemize}
+
+%=====================================================================
+\chapter{Thực nghiệm và kết quả}
+
+Chương này đánh giá DyTimeBase trên 5 bộ dữ liệu chuẩn ở cả hai mặt: độ chính xác dự báo và chi phí tính toán. Các thực
+nghiệm trả lời bốn câu hỏi:
+\begin{enumerate}
+  \item DyTimeBase chính xác hơn hay kém hơn các mô hình hiện đại ở những bộ dữ liệu nào?
+  \item So với xương sống TimeBase trong cùng một quy trình huấn luyện, nhánh trộn kênh có cải thiện kết quả không?
+  \item DyTimeBase nhanh và nhẹ đến mức nào so với các mô hình khác khi chạy trên cùng một thiết bị?
+  \item Từng khối của nhánh trộn kênh (CrossVBlock, IntraVBlock) đóng góp bao nhiêu?
+\end{enumerate}
+
+%---------------------------------------------------------------------
+\section{Mô tả dữ liệu thực nghiệm}
+
+Thực nghiệm dùng lại 5 bộ dữ liệu của Đồ án I: ETTh1, ETTh2, ETTm1, ETTm2 (nhiệt độ dầu và phụ tải máy biến áp, 7 biến)
+và Weather (21 chỉ số khí tượng). Đặc điểm chi tiết của từng bộ đã được mô tả ở Chương 3 của Đồ án I. Bảng~\ref{tab:data}
+tóm tắt kích thước dữ liệu và số cửa sổ mẫu khi độ dài đầu vào là $L=720$.
+
+\begin{table}[H]
+\centering
+\caption{Thống kê các bộ dữ liệu. Số cửa sổ tính với $L=720$, $S=96$ (huấn luyện / kiểm định / kiểm thử).}
+\label{tab:data}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Dataset & Số biến $C$ & Tần suất & Số bước dùng & Chia Train/Val/Test & Số cửa sổ\\
+\midrule
+ETTh1, ETTh2 & 7 & 1 giờ & 14\,400 & 12/4/4 tháng & 7\,825 / 2\,785 / 2\,785\\
+ETTm1, ETTm2 & 7 & 15 phút & 57\,600 & 12/4/4 tháng & 33\,745 / 11\,425 / 11\,425\\
+Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+%---------------------------------------------------------------------
+\section{Thiết lập thực nghiệm}
+
+\subsection{Tiền xử lý dữ liệu}
+
+Quy trình tiền xử lý giống Đồ án I, chỉ khác độ dài đầu vào:
+\begin{itemize}
+  \item \textbf{Chuẩn hóa Z-score} theo từng biến, với trung bình và độ lệch chuẩn chỉ tính trên tập huấn luyện rồi dùng
+        lại cho tập kiểm định và kiểm thử.
+  \item \textbf{Cửa sổ trượt}: mỗi mẫu gồm $L=720$ bước quá khứ và $S\in\{96,192,336,720\}$ bước tương lai. Độ dài
+        $L=720$ được chọn để trùng với thiết lập của TimeBase~\cite{timebase}, nhờ đó số liệu của các mô hình so sánh
+        lấy từ~\cite{timebase} có cùng điều kiện đầu vào.
+  \item \textbf{Chia dữ liệu theo thời gian}: tập kiểm định và kiểm thử được lấy thêm $L$ bước phía trước làm đầu vào,
+        nhưng toàn bộ nhãn dự báo nằm trong đúng tập tương ứng. Khi đánh giá, mọi cửa sổ của tập kiểm thử đều được dùng
+        (không bỏ lô cuối).
+\end{itemize}
+
+\subsection{Siêu tham số và quá trình huấn luyện}
+
+Siêu tham số của DyTimeBase gồm hai nhóm (Bảng~\ref{tab:hparams}):
+\begin{itemize}
+  \item \textbf{Xương sống} ($P$, $R$, tốc độ học $\alpha_B$, kích thước lô, $\lambda_{orth}$, tham số riêng từng kênh):
+        lấy nguyên theo script chính thức của TimeBase cho từng bộ dữ liệu và từng độ dài dự báo.
+  \item \textbf{Nhánh trộn kênh} ($D$, $p_1$, $p_2$): giữ nguyên bộ siêu tham số đã tối ưu bằng Grid Search cho DyTimeNet
+        trong Đồ án I (Bảng 3.1). DyTimeBase \emph{không} được tinh chỉnh thêm.
+\end{itemize}
+
+\input{tables/hparams.tex}
+
+Các thiết lập chung cho mọi bộ dữ liệu:
+\begin{itemize}
+  \item Hàm mục tiêu $\mathcal{L}=\mathcal{L}_{MSE}+\lambda_{orth}\mathcal{L}_{orth}$~\eqref{eq:objective}, tối ưu bằng Adam
+        không dùng weight decay và không cắt gradient.
+  \item Tốc độ học của nhánh trộn kênh $\alpha_M=5\cdot10^{-4}$ (bằng tốc độ học của DyTimeNet trong Đồ án I); lịch tốc
+        độ học theo~\eqref{eq:lr-schedule} áp dụng cho cả hai nhóm tham số.
+  \item $C'=\lfloor 0.75\,C\rfloor$, $D_{ff}=2D$, Dropout trong IntraVBlock $p_{drop}=0.1$.
+  \item Tối đa 30 epoch, dừng sớm khi MSE trên tập kiểm định không giảm sau 5 epoch; trọng số có MSE kiểm định thấp nhất
+        được dùng để đánh giá trên tập kiểm thử.
+  \item Mỗi cấu hình chạy với 3 seed (2021, 2022, 2023); kết quả báo cáo là trung bình của 3 lần chạy.
+\end{itemize}
+
+\subsection{Các mô hình so sánh}
+
+DyTimeBase được so sánh với 11 mô hình, chia làm hai nhóm:
+\begin{itemize}
+  \item \textbf{TimeBase$^{*}$}: TimeBase~\cite{timebase} cài đặt lại theo mã nguồn chính thức và chạy trong \emph{cùng quy
+        trình} với DyTimeBase (cùng dữ liệu, cùng siêu tham số xương sống, cùng 3 seed). Với cùng trọng số, đầu ra của bản
+        cài đặt lại lệch so với mã nguồn chính thức không quá $3\cdot10^{-7}$. Đây là phép so sánh công bằng nhất, vì hai mô
+        hình chỉ khác nhau đúng ở nhánh trộn kênh.
+  \item \textbf{Số liệu công bố}: TimeBase$^{\dagger}$, SparseTSF~\cite{sparsetsf}, TimeMixer~\cite{timemixer},
+        FITS~\cite{fits}, iTransformer~\cite{itransformer}, DLinear~\cite{dlinear}, PatchTST~\cite{patchtst},
+        TimesNet~\cite{timesnet}, FEDformer~\cite{fedformer}, Autoformer~\cite{autoformer} và Informer~\cite{informer}. Kết
+        quả lấy từ Table 10 của~\cite{timebase}, nơi mọi mô hình được chạy với cùng $L=720$ và cùng cách chia dữ liệu.
+        Các mô hình Transformer cỡ lớn không được huấn luyện lại vì chi phí trên CPU quá cao (ví dụ, một epoch của
+        PatchTST ở cấu hình Electricity mất khoảng 23 giờ, Bảng~\ref{tab:efficiency}).
+\end{itemize}
+
+\subsection{Môi trường thực nghiệm}
+
+Toàn bộ huấn luyện và đo đạc chạy trên một máy tính xách tay không có GPU: CPU AMD Ryzen 7 7840HS (8 nhân), 16 GB RAM (15.2 GB khả dụng),
+Windows 11, Python 3.13, PyTorch 2.6.0 (bản CPU).
+
+%---------------------------------------------------------------------
+\section{Các chỉ số đánh giá}
+
+\subsection{Chỉ số độ chính xác}
+
+Độ chính xác được đo bằng MSE và MAE như các công thức (3.1), (3.2) của Đồ án I:
+\begin{equation}
+\text{MSE}=\frac{1}{n}\sum_{i=1}^{n}(y_i-\hat{y}_i)^2,\qquad
+\text{MAE}=\frac{1}{n}\sum_{i=1}^{n}\lvert y_i-\hat{y}_i\rvert ,
+\label{eq:metrics}
+\end{equation}
+trong đó tổng lấy trên mọi cửa sổ kiểm thử, mọi bước dự báo và mọi biến. Sai số được tính trên thang đã chuẩn hóa
+Z-score, theo quy ước của các nghiên cứu được so sánh.
+
+\subsection{Chỉ số hiệu năng}
+
+Theo~\cite{timebase}, hiệu năng được đo bằng năm chỉ số trên cấu hình Electricity ($C=321$, $L=S=720$):
+\begin{itemize}
+  \item \textbf{Params}: số tham số huấn luyện được.
+  \item \textbf{MACs}: số phép nhân--cộng để dự báo một mẫu.
+  \item \textbf{Max Mem}: bộ nhớ đỉnh khi huấn luyện với lô 12 mẫu. Vì thiết bị không có GPU, đây là bộ nhớ RAM của
+        tiến trình, không phải bộ nhớ GPU như trong~\cite{timebase}.
+  \item \textbf{Epoch Time}: thời gian một epoch huấn luyện, tính bằng thời gian một bước (đo thực tế) nhân với số bước của
+        một epoch.
+  \item \textbf{Infer Time}: thời gian dự báo một mẫu trên CPU.
+\end{itemize}
+Mỗi mô hình được đo trong một tiến trình riêng, với dữ liệu ngẫu nhiên cùng kích thước (tốc độ không phụ thuộc giá
+trị dữ liệu). Các mô hình so sánh được dựng từ mã nguồn chính thức: Time-Series-Library~\cite{tslib} với cấu hình script
+chính thức, PatchTST theo kho mã của~\cite{patchtst}, FITS theo kho mã của~\cite{fits}.
+
+%---------------------------------------------------------------------
+\section{Kết quả thực nghiệm}
+
+\subsection{So sánh độ chính xác}
+
+Bảng~\ref{tab:acc-mse} và Bảng~\ref{tab:acc-mae} trình bày MSE và MAE của 13 mô hình trên 5 bộ dữ liệu.
+
+\input{tables/acc_mse.tex}
+\input{tables/acc_mae.tex}
+
+Xét MSE trung bình trên 4 độ dài dự báo:
+\begin{itemize}
+  \item Trên \textbf{ETTm1}, DyTimeBase đạt MSE thấp nhất trong cả 13 mô hình (0.351), tốt hơn PatchTST (0.355) và số
+        công bố của TimeBase (0.356).
+  \item Trên \textbf{ETTh1} và \textbf{Weather}, DyTimeBase đứng thứ hai (0.403 và 0.221), chỉ sau số công bố của
+        TimeBase (0.396 và 0.219), và tốt hơn PatchTST, SparseTSF, FITS cùng mọi mô hình Transformer.
+  \item Trên \textbf{ETTh2} và \textbf{ETTm2}, DyTimeBase (0.358 và 0.263) kém nhóm mô hình tuyến tính mạnh (FITS,
+        SparseTSF, TimeBase) và PatchTST.
+\end{itemize}
+
+Bảng~\ref{tab:h2h} đếm số lần DyTimeBase thắng từng mô hình trên 20 cặp (bộ dữ liệu, độ dài dự báo). DyTimeBase thắng
+toàn bộ 20/20 trước TimeMixer, iTransformer, TimesNet, FEDformer, Autoformer và Informer, và thắng DLinear 17/20. Với
+nhóm mô hình mạnh nhất (SparseTSF, FITS, PatchTST), DyTimeBase ở mức ngang ngửa: thắng trên ETTh1, ETTm1, Weather và
+thua trên ETTh2, ETTm2. DyTimeBase vẫn kém số liệu công bố của TimeBase (thắng 5/20).
+
+\input{tables/h2h.tex}
+
+\subsection{So sánh với TimeBase trong cùng quy trình}
+
+Số liệu công bố của TimeBase được chạy một lần, trong khi DyTimeBase là trung bình 3 seed. Bản TimeBase$^{*}$ chạy lại
+trong cùng quy trình cho kết quả kém hơn số công bố trên ETTh1, ETTh2 và ETTm1 (ví dụ 0.411 so với 0.396 trên ETTh1),
+nên so sánh DyTimeBase với số công bố là bất lợi cho DyTimeBase. Bảng~\ref{tab:vs-timebase} so sánh trực tiếp với
+TimeBase$^{*}$, nơi hai mô hình chỉ khác nhau ở nhánh trộn kênh.
+
+\input{tables/vs_timebase.tex}
+
+Nhánh trộn kênh giảm MSE trung bình trên ETTh1 ($-1.8\%$), ETTh2 ($-1.3\%$) và ETTm1 ($-4.5\%$), nhưng tăng MSE trên
+ETTm2 ($+3.7\%$) và Weather ($+0.8\%$). Mức cải thiện lớn nhất xuất hiện ở các độ dài dự báo ngắn (ETTm1 với $S=96$ và
+$S=192$: $-6.8\%$ và $-9.6\%$). Trên ETTm2, các lần chạy của DyTimeBase thường dừng sớm sau 6--7 epoch, cho thấy nhánh
+phi tuyến dễ quá khớp trên chuỗi tương đối trơn, nơi một mô hình tuyến tính đã đủ tốt.
+
+\subsection{Hiệu năng tính toán}
+
+\input{tables/efficiency.tex}
+
+Bảng~\ref{tab:efficiency} cho thấy:
+\begin{itemize}
+  \item DyTimeBase nhanh thứ hai trong 13 mô hình khi suy luận (0.66 ms một mẫu), chỉ sau TimeBase (0.34 ms), và nhanh
+        hơn SparseTSF, FITS, DLinear. So với các mô hình Transformer, DyTimeBase nhanh hơn iTransformer khoảng 16 lần,
+        TimeMixer khoảng 377 lần và PatchTST khoảng 434 lần.
+  \item Chi phí huấn luyện cũng thấp: 38 giây một epoch và 147 MB bộ nhớ, trong khi PatchTST cần hơn 10 GB và khoảng
+        23 giờ một epoch trên cùng thiết bị.
+  \item So với DyTimeNet của Đồ án I ở cùng cấu hình, DyTimeBase có ít hơn khoảng 4.1 lần tham số (190.5K so với 785.1K),
+        ít hơn khoảng 8.9 lần MACs (23.8M so với 211.8M) và suy luận nhanh hơn khoảng 3.2 lần.
+\end{itemize}
+Nguyên nhân là mọi phép biến đổi theo trục thời gian chạy trên các kích thước $N$, $R$, $P$ (vài chục) thay vì $L$, $S$
+(hàng trăm), như đã phân tích ở mục~\ref{sec:complexity}.
+
+\subsection{Nghiên cứu loại bỏ (Ablation study)}
+
+Bảng~\ref{tab:ablation} đánh giá đóng góp của từng khối trong nhánh trộn kênh. Các biến thể giữ nguyên mọi siêu tham số
+khác, chỉ bỏ đi một khối.
+
+\input{tables/ablation.tex}
+
+\begin{itemize}
+  \item Tính trung bình trên 5 bộ dữ liệu, DyTimeBase đầy đủ (0.3193) tốt hơn mọi biến thể đã bỏ khối: bỏ CrossVBlock
+        (0.3204), bỏ IntraVBlock (0.3209) và bỏ cả nhánh (0.3228). Cả hai khối đều có đóng góp, và hai khối bổ trợ
+        nhau: bỏ một khối thì vẫn giữ được một phần lợi ích.
+  \item Trên Weather (21 biến), bỏ CrossVBlock cho kết quả kém nhất (0.2226), còn chỉ giữ CrossVBlock (bỏ IntraVBlock)
+        cho kết quả tốt nhất (0.2186), tốt hơn cả TimeBase$^{*}$ (0.2195). Điều này phù hợp với giả thuyết rằng trộn kênh
+        có ích hơn khi số biến lớn.
+  \item Tăng tốc độ học của nhánh trộn kênh lên $2\cdot10^{-3}$ gần như không thay đổi kết quả (0.3189), nên cấu hình
+        $\alpha_M=5\cdot10^{-4}$ của Đồ án I được giữ nguyên.
+\end{itemize}
+
+\subsection{Thảo luận và hạn chế}
+
+\begin{itemize}
+  \item Các chênh lệch trong nghiên cứu loại bỏ (0.3--1.1\%) cùng cỡ với độ lệch chuẩn giữa các seed, nên chỉ cho thấy xu
+        hướng, chưa đủ để khẳng định chắc chắn đóng góp của từng khối.
+  \item DyTimeBase chưa vượt được số liệu công bố của TimeBase, và kém các mô hình tuyến tính mạnh trên ETTh2, ETTm2.
+  \item Số liệu của các mô hình so sánh (trừ TimeBase$^{*}$) được trích dẫn chứ không chạy lại; số tham số của Informer,
+        Autoformer, FEDformer ở Bảng~\ref{tab:efficiency} (cấu hình script của Time-Series-Library) khác với số
+        trong~\cite{timebase}.
+  \item Max Mem đo bằng RAM của CPU; Epoch Time của các mô hình lớn là ước tính từ thời gian một bước huấn luyện. MACs
+        không tính phép biến đổi Fourier nhanh, nên FEDformer, FITS và TimesNet bị đếm thiếu một phần nhỏ.
+\end{itemize}
+
+\section*{Tóm tắt chương}
+
+DyTimeBase dự báo một mẫu trong 0.66 ms trên CPU, nhanh thứ hai trong 13 mô hình và nhanh hơn các mô hình Transformer
+từ 16 đến hàng nghìn lần. Về độ chính xác, DyTimeBase vượt toàn bộ các mô hình Transformer và DLinear, đạt kết quả tốt
+nhất trên ETTm1, đứng thứ hai trên ETTh1 và Weather, và ngang ngửa nhóm mô hình tuyến tính mạnh (SparseTSF, FITS) cùng
+PatchTST. So với TimeBase trong cùng quy trình, nhánh trộn kênh cải thiện kết quả trên 3/5 bộ dữ liệu.
+
+%=====================================================================
+\begin{thebibliography}{99}
+\bibitem{timebase} Q. Huang, Z. Zhou, K. Yang, Z. Yi, X. Wang, Y. Wang, ``TimeBase: The power of minimalism in efficient
+  long-term time series forecasting,'' in \emph{Proc. ICML}, PMLR 267, pp. 26227--26246, 2025.
+\bibitem{dytimenet} T. Chen, J. Lai, Y. Sun, W. K. Chan, ``DyTimeNet: Dynamic cross-variable dependency network with sparse
+  strategy for multivariate time series forecasting,'' \emph{Neurocomputing}, vol. 676, p. 132964, 2026.
+\bibitem{tslib} Y. Wang, H. Wu, J. Dong, Y. Liu, M. Long, J. Wang, ``Deep time series models: A comprehensive survey and
+  benchmark,'' \emph{arXiv:2407.13278}, 2024.
+\bibitem{sparsetsf} S. Lin, W. Lin, W. Wu, H. Chen, J. Yang, ``SparseTSF: Modeling long-term time series forecasting with
+  1k parameters,'' in \emph{Proc. ICML}, 2024.
+\bibitem{timemixer} S. Wang, H. Wu, X. Shi, T. Hu, H. Luo, L. Ma, et al., ``TimeMixer: Decomposable multiscale mixing for
+  time series forecasting,'' in \emph{Proc. ICLR}, 2024.
+\bibitem{fits} Z. Xu, A. Zeng, Q. Xu, ``FITS: Modeling time series with 10k parameters,'' in \emph{Proc. ICLR}, 2024.
+\bibitem{itransformer} Y. Liu, T. Hu, H. Zhang, H. Wu, S. Wang, L. Ma, M. Long, ``iTransformer: Inverted transformers are
+  effective for time series forecasting,'' in \emph{Proc. ICLR}, 2024.
+\bibitem{dlinear} A. Zeng, M. Chen, L. Zhang, Q. Xu, ``Are transformers effective for time series forecasting?'' in
+  \emph{Proc. AAAI}, 2023.
+\bibitem{patchtst} Y. Nie, N. H. Nguyen, P. Sinthong, J. Kalagnanam, ``A time series is worth 64 words: Long-term
+  forecasting with transformers,'' in \emph{Proc. ICLR}, 2023.
+\bibitem{timesnet} H. Wu, T. Hu, Y. Liu, H. Zhou, J. Wang, M. Long, ``TimesNet: Temporal 2D-variation modeling for general
+  time series analysis,'' in \emph{Proc. ICLR}, 2023.
+\bibitem{fedformer} T. Zhou, Z. Ma, Q. Wen, X. Wang, L. Sun, R. Jin, ``FEDformer: Frequency enhanced decomposed transformer
+  for long-term series forecasting,'' in \emph{Proc. ICML}, 2022.
+\bibitem{autoformer} H. Wu, J. Xu, J. Wang, M. Long, ``Autoformer: Decomposition transformers with auto-correlation for
+  long-term series forecasting,'' in \emph{Proc. NeurIPS}, 2021.
+\bibitem{informer} H. Zhou, S. Zhang, J. Peng, S. Zhang, J. Li, H. Xiong, W. Zhang, ``Informer: Beyond efficient
+  transformer for long sequence time-series forecasting,'' in \emph{Proc. AAAI}, 2021.
+\end{thebibliography}
+
+\end{document}
