@@ -116,15 +116,15 @@ def efficiency_table():
 
     def th(v, fmt=",.0f"):
         return format(v, fmt).replace(",", r"\,")
-    head = [r"Mô hình & Params & MACs & Max Mem (MB) & Epoch Time (s) & Infer Time (ms) & So với DyBAS-Net\\",
+    head = [r"Mô hình & Params & MACs & Epoch Time (s) & Infer Time (ms) & So với DyBAS-Net\\",
             r"\midrule"]
     rows = []
     for n, x in sorted(r.items(), key=lambda kv: kv[1]["infer_ms_t8"]):
-        mem = rf"$>${th(x['mem_over_gb'] * 1024)}$^{{\ddagger}}$" if "mem_over_gb" in x else th(x["max_mem_mb"])
+        epoch = th(x["epoch_s"]) + (r"$^{\ddagger}$" if "mem_over_gb" in x else "")
         label = r"\textbf{DyBAS-Net}" if n == "DyTimeBase" else n.replace(" (cũ)", "")
-        rows.append(f"{label} & {count(x['params'])} & {count(x['macs'])} & {mem} & {th(x['epoch_s'])} & "
+        rows.append(f"{label} & {count(x['params'])} & {count(x['macs'])} & {epoch} & "
                     f"{th(x['infer_ms_t8'], ',.2f')} & {th(x['infer_ms_t8'] / ref, ',.2f')}$\\times$" + r"\\")
-    return wrap(head + rows, "lrrrrrr")
+    return wrap(head + rows, "lrrrrr")
 
 
 def ablation_table(runs):

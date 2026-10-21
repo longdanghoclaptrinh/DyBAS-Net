@@ -618,14 +618,13 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 
 \begin{frame}{Hiệu năng tính toán trên cùng một thiết bị}
 \scriptsize
-Electricity ($C=321$), $L=S=720$. Max Mem: đỉnh RAM khi huấn luyện, lô 12 mẫu. Epoch Time: thời gian một bước huấn luyện
-(lô 12) $\times$ 1\,414 bước. Infer Time: dự báo 1 mẫu, 8 luồng. Sắp xếp theo Infer Time.
+Electricity ($C=321$), $L=S=720$. Epoch Time: thời gian một bước huấn luyện (lô 12) $\times$ 1\,414 bước. Infer Time: dự báo 1 mẫu, 8 luồng. Sắp xếp theo Infer Time.
 
 \vspace{0.1cm}
 \input{tables/efficiency.tex}
 
 \vspace{0.05cm}
-{\tiny $^{\ddagger}$ Vượt ngưỡng 11 GB RAM ở lô 12; Epoch Time của mô hình này đo ở lô 4.}
+{\tiny $^{\ddagger}$ Không đủ bộ nhớ để huấn luyện với lô 12; Epoch Time đo ở lô 4.}
 \end{frame}
 
 \begin{frame}{Nhận xét hiệu năng}
@@ -633,41 +632,13 @@ Electricity ($C=321$), $L=S=720$. Max Mem: đỉnh RAM khi huấn luyện, lô 1
     \item DyBAS-Net \textbf{nhanh thứ hai trong 13 mô hình} khi suy luận (0.66 ms một mẫu), chỉ sau TimeBase (0.34 ms).
     \item Nhanh hơn SparseTSF (0.76 ms), FITS (1.70 ms), DLinear (1.93 ms).
     \item So với Transformer: nhanh hơn iTransformer $\sim$16 lần, TimeMixer $\sim$377 lần, PatchTST $\sim$434 lần.
-    \item Huấn luyện nhẹ: 38 s một epoch, 147 MB bộ nhớ (PatchTST: hơn 10 GB, khoảng 23 giờ một epoch).
+    \item Huấn luyện nhẹ: 38 s một epoch (PatchTST: khoảng 23 giờ một epoch).
     \item So với DyTimeNet (Đồ án I): ít hơn $\sim$4.1 lần tham số, $\sim$8.9 lần MACs, suy luận nhanh hơn $\sim$3.2 lần.
 \end{itemize}
 
 \begin{block}{Nguyên nhân}
 Biến đổi theo trục thời gian chạy trên $N$, $R$, $P$ (vài chục) thay vì $L$, $S$ (hàng trăm); không có attention.
 \end{block}
-\end{frame}
-
-\subsection{Nghiên cứu loại bỏ}
-
-\begin{frame}{Nghiên cứu loại bỏ (Ablation study)}
-\small
-MSE trung bình trên 4 độ dài dự báo và 3 seed; mỗi biến thể chỉ bỏ một khối, giữ nguyên mọi siêu tham số khác.
-
-\vspace{0.15cm}
-\scriptsize
-\input{tables/ablation.tex}
-
-\vspace{0.1cm}
-\textcolor{red}{\textbf{Đỏ}}: tốt nhất; \textcolor{blue}{xanh}: thứ hai (mỗi cột).
-
-\vspace{0.2cm}
-\small
-Các biến thể ``bỏ khối'' chỉ dùng để kiểm chứng; mô hình đề xuất là DyBAS-Net đầy đủ.
-\end{frame}
-
-\begin{frame}{Nhận xét nghiên cứu loại bỏ}
-\begin{itemize}
-    \item Tính trung bình, \textbf{bản đầy đủ tốt hơn mọi bản đã bỏ khối}: bỏ CrossVBlock (0.3204), bỏ IntraVBlock (0.3209),
-          bỏ cả nhánh (0.3228) so với 0.3193.
-    \item \textbf{Weather} (21 biến): bỏ CrossVBlock cho kết quả kém nhất (0.2226); chỉ giữ CrossVBlock cho kết quả tốt nhất
-          (0.2186), tốt hơn TimeBase$^{*}$. Trộn biến có ích hơn khi có nhiều biến.
-    \item Tăng $\alpha_M$ lên $2\cdot10^{-3}$ gần như không đổi (0.3189), nên giữ cấu hình của Đồ án I.
-\end{itemize}
 \end{frame}
 
 %=====================================================================
@@ -693,8 +664,8 @@ Các biến thể ``bỏ khối'' chỉ dùng để kiểm chứng; mô hình đ
     \item \textbf{Quá khớp trên dữ liệu trơn:} trên ETTm2, nhánh phi tuyến làm MSE tăng $3.7\%$ so với TimeBase$^{*}$.
     \item \textbf{Mức cải thiện nhỏ:} các chênh lệch trong ablation ($0.3$--$1.1\%$) cùng cỡ độ lệch chuẩn giữa các seed.
     \item \textbf{Chậm hơn TimeBase} khoảng 2 lần, cái giá của nhánh trộn biến.
-    \item \textbf{Phạm vi đánh giá:} số liệu của 10 mô hình lớn là số trích dẫn; hiệu năng đo trên CPU (Max Mem là RAM,
-          Epoch Time của mô hình lớn là ước tính từ một bước huấn luyện).
+    \item \textbf{Phạm vi đánh giá:} số liệu của 10 mô hình lớn là số trích dẫn; hiệu năng đo trên CPU (Epoch Time
+          là ước tính từ thời gian một bước huấn luyện).
 \end{itemize}
 \end{frame}
 
