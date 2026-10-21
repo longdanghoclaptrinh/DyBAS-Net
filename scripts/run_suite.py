@@ -27,18 +27,27 @@ TB_LRS = (0.005, 0.02, 0.08)
 # Siêu tham số chính thức của TimeBase theo từng horizon (scripts/etth1.sh, scripts/weather.sh trong
 # github.com/hqh0728/TimeBase): (orthogonal_weight, batch_size, learning_rate); chung: period_norm, R = 6,
 # 30 epoch, patience 5, lradj type3, Adam không weight decay, không clip gradient. Weather dùng individual = 1.
+#   giá trị: (orthogonal_weight, batch_size, learning_rate, period_len P, basis_num R).
 TB_OFFICIAL = {
-    "ETTh1": {96: (0.16, 64, 0.1), 192: (0.16, 256, 0.4), 336: (0.08, 256, 0.4), 720: (0.12, 64, 0.05)},
-    "Weather": {96: (0.04, 512, 0.02), 192: (0.04, 512, 0.02), 336: (0.08, 512, 0.05), 720: (0.04, 512, 0.05)},
+    "ETTh1": {96: (0.16, 64, 0.1, 24, 6), 192: (0.16, 256, 0.4, 24, 6), 336: (0.08, 256, 0.4, 24, 6),
+              720: (0.12, 64, 0.05, 24, 6)},
+    "ETTh2": {96: (0.2, 512, 0.2, 24, 6), 192: (0.08, 512, 0.06, 24, 4), 336: (0.12, 64, 0.4, 24, 6),
+              720: (0.12, 64, 0.4, 24, 6)},
+    "ETTm1": {96: (0.04, 512, 0.02, 4, 18), 192: (0.04, 256, 0.02, 4, 20), 336: (0.08, 256, 0.02, 4, 20),
+              720: (0.12, 128, 0.01, 6, 20)},
+    "ETTm2": {96: (0.04, 64, 0.01, 4, 20), 192: (0.04, 64, 0.01, 4, 20), 336: (0.04, 64, 0.01, 4, 20),
+              720: (0.04, 64, 0.01, 6, 20)},
+    "Weather": {96: (0.04, 512, 0.02, 4, 6), 192: (0.04, 512, 0.02, 4, 6), 336: (0.08, 512, 0.05, 4, 6),
+                720: (0.04, 512, 0.05, 4, 6)},
 }
-TB_INDIVIDUAL = {"ETTh1": False, "Weather": True}
+TB_INDIVIDUAL = {"ETTh1": False, "ETTh2": False, "ETTm1": False, "ETTm2": False, "Weather": True}
 
 
 def official(dataset, model, **extra):
     """Biến thể theo horizon: trả hàm horizon → overrides với siêu tham số chính thức của TimeBase."""
     def overrides(horizon):
-        orth, batch, lr = TB_OFFICIAL[dataset][horizon]
-        return {"model": model, "period": TB_PERIOD[dataset], "basis_num": 6, "period_norm": True,
+        orth, batch, lr, period, basis = TB_OFFICIAL[dataset][horizon]
+        return {"model": model, "period": period, "basis_num": basis, "period_norm": True,
                 "individual": TB_INDIVIDUAL[dataset], "orth_weight": orth, "batch_size": batch, "lr": lr,
                 "epochs": 30, "patience": 5, "lr_schedule": "type3", "weight_decay": 0.0, "grad_clip": 0.0, **extra}
     return overrides

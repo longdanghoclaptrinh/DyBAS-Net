@@ -57,7 +57,8 @@ def tslib_config(C, L, S, **over):
                d_model=512, d_ff=2048, n_heads=8, e_layers=2, d_layers=1, factor=3, dropout=0.1, embed="timeF",
                freq="h", activation="gelu", use_norm=1, features="M", moving_avg=25, channel_independence=1,
                decomp_method="moving_avg", top_k=5, num_class=1, patch_len=16, down_sampling_layers=0,
-               down_sampling_window=1, down_sampling_method=None, output_attention=False)
+               down_sampling_window=1, down_sampling_method=None, output_attention=False, distil=True,
+               num_kernels=6)
     cfg.update(over)
     return types.SimpleNamespace(**cfg)
 
