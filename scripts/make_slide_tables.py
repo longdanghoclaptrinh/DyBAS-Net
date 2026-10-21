@@ -70,7 +70,8 @@ def horizon_table(table, datasets):
         for k, h in enumerate(HORIZONS):
             vals = [table[(ds, h)][c][0] for c in COLS]          # hạng tính trên cả 13 mô hình
             lab = rf"\multirow{{4}}{{*}}{{{ds}}}" if k == 0 else ""
-            rows.append(f"{lab} & {h} & " + " & ".join(mark(vals, table[(ds, h)][c][0]) for c in STRONG) + r"\\")
+            rows.append(f"{lab} & {h} & " + " & ".join(mark_color(vals, table[(ds, h)][c][0]) for c in STRONG)
+                        + r"\\")
         if ds != datasets[-1]:
             rows.append(r"\midrule")
     return wrap(head + rows, "ll" + "c" * len(STRONG))
@@ -139,7 +140,7 @@ def ablation_table(runs):
         cells = []
         for i, x in enumerate(v + [means[lab]]):
             col = [r[i] for r in vals.values()] if i < len(DATASETS) else list(means.values())
-            cells.append(rf"\textbf{{{x:.4f}}}" if x == min(col) else f"{x:.4f}")
+            cells.append(mark_color(col, x, digits=4))
         rows.append(f"{labels[lab]} & " + " & ".join(cells) + r"\\")
         if lab.startswith("bỏ cả"):
             rows.append(r"\midrule")
