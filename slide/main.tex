@@ -380,9 +380,6 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
     \begin{itemize}
         \item $\mathbf{W}_{enc}\in\R^{PR\times D}$: ma trận trọng số có thể học; $\mathbf{b}_{enc}\in\R^{D}$: vector độ lệch.
     \end{itemize}
-
-    \item \textbf{So với DyTimeNet:} cùng dạng $\mathcal{X}_{enc} = \mathbf{W}_{enc}^{\top}\mathcal{X}' + \mathbf{b}_{enc}$,
-          nhưng đầu vào là $P\cdot R$ hệ số cơ sở thay cho $L$ điểm (ETTh1: $144$ thay cho $720$).
 \end{itemize}
 \end{frame}
 
@@ -442,14 +439,6 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
     \small Lớp thứ hai làm tương tự, với đầu vào $\mathbf{H}$ và trọng số $\mathbf{W}_{df,2}$.
 \end{frame}
 
-\IfFileExists{Mask.png}{%
-\begin{frame}{Mô phỏng mặt nạ mạng}
- \begin{figure}
-     \centering
-     \includegraphics[width=0.85\linewidth]{Mask.png}
-     \caption{Mô phỏng mặt nạ mạng}
- \end{figure}
-\end{frame}}{}
 
 \begin{frame}{5b. DropFusion: Chuẩn hóa kỳ vọng}
     \begin{itemize}
@@ -463,13 +452,13 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
           + \mathbf{b}_1\right]\odot\mathcal{M}_2$$
     \end{alertblock}
 
-    \begin{itemize}
-        \item \textbf{Khi kiểm thử:} $\mathcal{M}_1=\mathcal{M}_2=\one$, không nhân hệ số bù:
-              $\text{DF}(\mathcal{X}'_{enc}) = \mathcal{X}'_{enc}\,\mathbf{W}_{df,1} + \mathbf{b}_1$
-              (đúng bằng lớp tuyến tính ở CrossVBlock).
-        \item Lớp thứ hai: thay $\mathcal{X}'_{enc}$ bằng $\mathbf{H}$, $\mathbf{W}_{df,1}$ bằng $\mathbf{W}_{df,2}$,
-              $\mathbf{b}_1$ bằng $\mathbf{b}_2$.
-    \end{itemize}
+    % \begin{itemize}
+    %     \item \textbf{Khi kiểm thử:} $\mathcal{M}_1=\mathcal{M}_2=\one$, không nhân hệ số bù:
+    %           $\text{DF}(\mathcal{X}'_{enc}) = \mathcal{X}'_{enc}\,\mathbf{W}_{df,1} + \mathbf{b}_1$
+    %           (đúng bằng lớp tuyến tính ở CrossVBlock).
+    %     \item Lớp thứ hai: thay $\mathcal{X}'_{enc}$ bằng $\mathbf{H}$, $\mathbf{W}_{df,1}$ bằng $\mathbf{W}_{df,2}$,
+    %           $\mathbf{b}_1$ bằng $\mathbf{b}_2$.
+    % \end{itemize}
 \end{frame}
 
 \begin{frame}{6. Khối Nội biến (IntraVBlock)}
@@ -485,7 +474,6 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
         $$\hat{\mathcal{X}}_{intra} = \mathcal{X}_{intra} + \text{FFN}\big(\operatorname{LN}(\mathcal{X}_{intra})\big)
           \quad \in \R^{D \times C}$$
 
-        \item FFN không trộn các biến; nó biến đổi phi tuyến $D$ đặc trưng bên trong mỗi biến.
     \end{itemize}
 \end{frame}
 
@@ -499,7 +487,7 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
         $$\mathbf{E}'^{(i)} = \mathbf{E}^{(i)} + \Delta\mathbf{E}^{(i)}$$
 
         \item \textbf{Khởi tạo bằng 0:} $\mathbf{W}_{out}=\mathbf{0}$, $\mathbf{b}_{out}=\mathbf{0}$ nên lúc bắt đầu huấn
-              luyện $\Delta\mathbf{E}^{(i)}=\mathbf{0}$ và DyBAS-Net trùng với TimeBase.
+              luyện $\Delta\mathbf{E}^{(i)}=\mathbf{0}$.
         \item \textbf{Ý nghĩa:} nhánh trộn biến chỉ học \emph{phần hiệu chỉnh}: dùng thông tin của các biến khác để sửa các
               ``ngày điển hình'' của biến $i$.
     \end{itemize}
@@ -521,27 +509,21 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 
 \begin{frame}{9. Overview Pipeline}
     \centering
-    \includegraphics[width=\linewidth]{dytimebase_architecture.png}
+    \includegraphics[width=1\linewidth]{dytimebase_architecture.png}
 
-    \vspace{0.05cm}
-    {\scriptsize Khối xanh: xương sống TimeBase (tuyến tính, độc lập biến). Khối cam: nhánh trộn biến trong không gian cơ sở
-    (khối của DyTimeNet). Trong mã nguồn, mô hình có tên DyTimeBase.}
 \end{frame}
 
 \begin{frame}{Điều chỉnh và Tối ưu hóa Trọng số}
     \begin{itemize}
-        \item Trọng số được cập nhật ngược hướng gradient của hàm mục tiêu $\mathcal{L}$ (bộ tối ưu
-              Adam\refnote{Kingma2014Adam}):
+        \item Trọng số được cập nhật ngược hướng gradient của hàm mục tiêu $\mathcal{L}$:
         \[ W_{k+1} = W_k - \alpha \frac{\partial \mathcal{L}}{\partial W_k}, \qquad
            b_{k+1} = b_k - \alpha \frac{\partial \mathcal{L}}{\partial b_k} \]
 
-        \item \textbf{Hai tốc độ học:} $\alpha=\alpha_B$ cho xương sống ($\mathbf{W}_B,\mathbf{b}_B,\mathbf{W}_F,\mathbf{b}_F$),
+        \item \textbf{Hai tốc độ học:} $\alpha=\alpha_B$ cho $\mathbf{W}_B,\mathbf{b}_B,\mathbf{W}_F,\mathbf{b}_F$,
               $\alpha=\alpha_M$ cho nhánh trộn biến.
 
-        \item \textbf{Lịch tốc độ học} theo epoch $e$: giữ nguyên 4 epoch đầu, sau đó nhân $0.8$ mỗi epoch:
+        \item \textbf{Tốc độ học} theo epoch $e$: giữ nguyên 4 epoch đầu, sau đó nhân $0.8$ mỗi epoch:
         $\alpha^{(e)} = \alpha$ nếu $e\le 4$, \ $\alpha^{(e)} = \alpha\cdot 0.8^{\,e-4}$ nếu $e>4$.
-
-        \item Tối đa 30 epoch; dừng sớm nếu MSE trên tập Validation không giảm sau 5 epoch.
     \end{itemize}
 \end{frame}
 
@@ -589,30 +571,11 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 \end{itemize}
 \end{frame}
 
-\begin{frame}{Thiết lập huấn luyện}
-\begin{itemize}
-    \item \textbf{Xương sống:} $P$, $R$, $\alpha_B$, kích thước lô, $\lambda_{orth}$ theo script chính thức của
-          TimeBase\refnote{Huang2025TimeBase} cho từng bộ dữ liệu và từng $S$.
-    \item \textbf{Nhánh trộn biến:} giữ nguyên $D$, $p_1$, $p_2$ đã tối ưu bằng Grid Search cho DyTimeNet trong
-          Đồ án~I; $\alpha_M = 5\cdot10^{-4}$. \emph{Không tinh chỉnh thêm} cho DyBAS-Net.
-    \item Mỗi cấu hình chạy 3 seed (2021, 2022, 2023); báo cáo trung bình.
-    \item \textbf{Thiết bị:} máy tính xách tay không GPU, CPU AMD Ryzen 7 7840HS (8 nhân), 16 GB RAM, PyTorch 2.6 (CPU).
-\end{itemize}
-\end{frame}
-
 \begin{frame}{Siêu tham số của DyBAS-Net}
 \begin{center}
 \small
 \input{tables/hparams.tex}
 \end{center}
-
-\vspace{0.1cm}
-\footnotesize
-\begin{itemize}
-    \item $P$, $R$ (và tốc độ học, kích thước lô, $\lambda_{orth}$) đổi theo $S$, đúng như script chính thức của TimeBase.
-    \item ``Riêng biến'': Weather dùng $\mathbf{W}_B$, $\mathbf{W}_F$ riêng cho từng biến (số MACs không đổi).
-    \item $D$, $p_1$, $p_2$: lấy nguyên từ Bảng 3.1 của Đồ án I; $C'=\lfloor 0.75\,C\rfloor$, $D_{ff}=2D$, Dropout $0.1$.
-\end{itemize}
 \end{frame}
 
 \begin{frame}{Các mô hình so sánh}
@@ -660,19 +623,20 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 \input{tables/avg.tex}
 
 \vspace{0.1cm}
-$^{*}$ tự chạy, trung bình 3 seed. $^{\dagger}$ số công bố của TimeBase (chạy 1 lần). Các mô hình dưới vạch kẻ: số công bố
+$^{*}$ TimeBase đo trên máy này, cùng quy trình với DyBAS-Net, trung bình 3 seed. Các mô hình dưới vạch kẻ: số công bố
 trong \cite{Huang2025TimeBase}, cùng $L=720$; trung bình tính từ kết quả theo từng $S$ (Table 10).
-\textbf{Đậm}: tốt nhất; \underline{gạch chân}: thứ hai.
+\textcolor{red}{\textbf{Đỏ}}: tốt nhất; \textcolor{blue}{xanh}: thứ hai.
 \end{frame}
 
 \begin{frame}{Nhận xét kết quả độ chính xác}
 \begin{itemize}
-    \item \textbf{ETTm1:} DyBAS-Net có MSE \textbf{thấp nhất trong cả 13 mô hình} (0.351), tốt hơn PatchTST (0.355) và
-          TimeBase$^{\dagger}$ (0.356).
-    \item \textbf{ETTh1, Weather:} DyBAS-Net đứng \textbf{thứ hai} về MSE (0.403 và 0.221), chỉ sau TimeBase; tốt hơn
+    \item \textbf{ETTh1, ETTm1:} DyBAS-Net có MSE \textbf{thấp nhất} trong bảng (0.403 và 0.351), tốt hơn SparseTSF
+          (0.407) trên ETTh1 và PatchTST (0.355) trên ETTm1.
+    \item \textbf{Weather:} DyBAS-Net đứng \textbf{thứ hai} về MSE (0.221), chỉ sau TimeBase$^{*}$ (0.219); tốt hơn
           PatchTST, SparseTSF, FITS và mọi mô hình Transformer.
-    \item \textbf{ETTh2, ETTm2:} DyBAS-Net (0.358 và 0.263) kém nhóm tuyến tính mạnh (FITS, SparseTSF, TimeBase) và PatchTST.
-    \item \textbf{MAE:} cải thiện ít hơn MSE; trên phần lớn bộ dữ liệu, MAE của DyBAS-Net không tốt hơn TimeBase.
+    \item \textbf{ETTh2, ETTm2:} DyBAS-Net (0.358 và 0.263) kém nhóm tuyến tính mạnh (FITS, SparseTSF, TimeBase$^{*}$) và
+          PatchTST.
+    \item \textbf{MAE:} cải thiện ít hơn MSE; trên phần lớn bộ dữ liệu, MAE của DyBAS-Net không tốt hơn TimeBase$^{*}$.
 \end{itemize}
 \end{frame}
 
