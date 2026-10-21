@@ -15,8 +15,9 @@ from make_report_tables import BRANCH, COLS, load_all  # noqa: E402
 from run_suite import TB_INDIVIDUAL, TB_OFFICIAL  # noqa: E402
 
 OUT = Path("slide/tables")
+SHOWN = [c for c in COLS if c != "TimeBase"]   # chỉ giữ TimeBase đo trên máy này (TimeBase*)
 NAME = {"DyTimeBase": r"\textbf{DyBAS-Net}", "TimeBase*": r"TimeBase$^{*}$", "TimeBase": r"TimeBase$^{\dagger}$"}
-STRONG = ["DyTimeBase", "TimeBase*", "TimeBase", "SparseTSF", "FITS", "PatchTST", "iTransformer", "DLinear",
+STRONG = ["DyTimeBase", "TimeBase*", "SparseTSF", "FITS", "PatchTST", "iTransformer", "DLinear",
           "TimeMixer"]
 
 
@@ -51,7 +52,7 @@ def avg_table(table):
             "".join(rf"\cmidrule(lr){{{2 + 2 * k}-{3 + 2 * k}}}" for k in range(len(DATASETS))),
             " & " + " & ".join("MSE & MAE" for _ in DATASETS) + r"\\", r"\midrule"]
     rows = []
-    cols = [c for c in COLS if c != "TimeBase"]          # chỉ giữ TimeBase đo trên máy này (TimeBase*)
+    cols = SHOWN
     for c in cols:
         cells = []
         for ds in DATASETS:
@@ -68,7 +69,7 @@ def horizon_table(table, datasets):
     rows = []
     for ds in datasets:
         for k, h in enumerate(HORIZONS):
-            vals = [table[(ds, h)][c][0] for c in COLS]          # hạng tính trên cả 13 mô hình
+            vals = [table[(ds, h)][c][0] for c in SHOWN]         # hạng trên 12 mô hình (bỏ TimeBase công bố)
             lab = rf"\multirow{{4}}{{*}}{{{ds}}}" if k == 0 else ""
             rows.append(f"{lab} & {h} & " + " & ".join(mark_color(vals, table[(ds, h)][c][0]) for c in STRONG)
                         + r"\\")
@@ -80,7 +81,7 @@ def horizon_table(table, datasets):
 def h2h_table(table):
     head = [r"Đối thủ & Thắng & Hòa & Thua & DyBAS-Net tốt hơn (MSE TB) & DyBAS-Net kém hơn (MSE TB)\\", r"\midrule"]
     rows = []
-    for c in COLS[1:]:
+    for c in SHOWN[1:]:
         w = t = l = 0
         for ds in DATASETS:
             for h in HORIZONS:
