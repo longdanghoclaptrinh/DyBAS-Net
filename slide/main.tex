@@ -276,6 +276,28 @@ $D_{ff}=2D$ & Số chiều ẩn của FFN trong IntraVBlock & $128$ \\
 \end{center}
 \end{frame}
 
+\begin{frame}{Quy ước ký hiệu}
+\begin{center}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lll@{}}
+\toprule
+Ký hiệu & Ý nghĩa & Ví dụ\\
+\midrule
+Chữ thường, không đậm: $x$ & Một số (vô hướng) & $x^{(i)}_t$: giá trị của biến $i$ tại thời điểm $t$\\
+Chữ thường, in đậm: $\mathbf{x}$ & Một vector cột & $\mathbf{x}^{(i)}$: cả chuỗi của biến $i$\\
+Chữ hoa, in đậm: $\mathbf{X}$ & Một ma trận & $\mathbf{X}^{(i)}\in\R^{P\times N}$: ma trận đoạn của biến $i$\\
+Chữ hoa nghiêng: $\mathcal{X}$ & Ma trận chứa \emph{mọi} biến & $\mathcal{X}_{enc}\in\R^{D\times C}$\\
+\midrule
+Chỉ số trên $^{(i)}$ & Thuộc biến thứ $i$ & $\mathbf{E}^{(i)}$: cơ sở của biến $i$\\
+Ngoặc vuông $[\,\cdot\,]_{p,n}$ & Phần tử hàng $p$, cột $n$ của ma trận & $\big[\mathbf{X}^{(i)}\big]_{p,n}$\\
+Chỉ số dưới của vector in đậm & Cột thứ mấy của ma trận & $\mathbf{e}^{(i)}_r$: cột thứ $r$ của $\mathbf{E}^{(i)}$\\
+Chỉ số dưới $_b$ của ma trận & Mẫu thứ $b$ trong một lô & $\mathbf{G}^{(i)}_b$: ma trận Gram của mẫu $b$\\
+Dấu ngã, mũ, phẩy: $\tilde{\mathbf{X}}$, $\hat{\mathbf{Y}}$, $\mathbf{E}'$ & Đã chuẩn hóa / dự báo / đã hiệu chỉnh & \\
+\bottomrule
+\end{tabular}}
+\end{center}
+\end{frame}
+
 \begin{frame}{Kiến trúc cơ bản của các mô hình dự báo CTG}
 \centering
     \includegraphics[width=1\linewidth]{pipeline_tong_quat.png}
@@ -312,8 +334,6 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \qquad \big[\mathbf{X}^{(i)}\big]_{p,n} = x^{(i)}_{(n-1)P+p}
 \]
 \begin{itemize}
-    \item \textbf{Cột} $n$: đoạn thứ $n$ (ví dụ ngày thứ $n$). \textbf{Hàng} $p$: cùng một pha (ví dụ cùng một giờ) qua $N$
-          chu kỳ.
     \item Ví dụ ETTh1: $L=720$, $P=24$ $\Rightarrow$ $N=30$ cột, mỗi cột là một ngày.
     \item $\big[\mathbf{X}^{(i)}\big]_{p,n}$: phần tử ở hàng $p$, cột $n$ là giá trị ở giờ thứ $p$ của ngày thứ $n$.
           Trước ngày thứ $n$ có $(n-1)$ ngày đầy đủ, tức $(n-1)P$ điểm; đi thêm $p$ bước vào ngày $n$ là tới vị trí
@@ -531,23 +551,23 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
     \end{itemize}
 \end{frame}
 
-\begin{frame}{Vì sao DyBAS-Net nhẹ: Độ phức tạp tính toán}
-    \small
-    Số phép nhân--cộng (MACs) cho một mẫu:
-    \begin{itemize}
-        \item \textbf{Xương sống} (trích xuất cơ sở, dự báo theo đoạn): \
-        $\text{MACs}_{B} = C\cdot P\cdot R\cdot(N+N')$
-        \item \textbf{Nhánh trộn biến:}
-        $$\text{MACs}_{M} = \underbrace{2\,C\,PR\,D}_{\text{mã hóa, chiếu ngược}}
-          + \underbrace{2\,D\,C\,C'}_{\text{CrossVBlock}} + \underbrace{2\,C\,D\,D_{ff}}_{\text{IntraVBlock}}$$
-        \item Không có số hạng nào tỉ lệ với $L\cdot S$; nhánh trộn biến không phụ thuộc $L$ và $S$.
-    \end{itemize}
+% \begin{frame}{Vì sao DyBAS-Net nhẹ: Độ phức tạp tính toán}
+%     \small
+%     Số phép nhân--cộng (MACs) cho một mẫu:
+%     \begin{itemize}
+%         \item \textbf{Xương sống} (trích xuất cơ sở, dự báo theo đoạn): \
+%         $\text{MACs}_{B} = C\cdot P\cdot R\cdot(N+N')$
+%         \item \textbf{Nhánh trộn biến:}
+%         $$\text{MACs}_{M} = \underbrace{2\,C\,PR\,D}_{\text{mã hóa, chiếu ngược}}
+%           + \underbrace{2\,D\,C\,C'}_{\text{CrossVBlock}} + \underbrace{2\,C\,D\,D_{ff}}_{\text{IntraVBlock}}$$
+%         \item Không có số hạng nào tỉ lệ với $L\cdot S$; nhánh trộn biến không phụ thuộc $L$ và $S$.
+%     \end{itemize}
 
-    \begin{block}{Ví dụ Electricity: $C=321$, $L=S=720$, $P=24$, $R=6$, $D=64$}
-    $\text{MACs}_B\approx 2.8$M, $\text{MACs}_M\approx 21.0$M, tổng $\approx 23.8$M. \\
-    So sánh: DLinear $2CLS\approx 333$M; DyTimeNet $\approx 212$M.
-    \end{block}
-\end{frame}
+%     \begin{block}{Ví dụ Electricity: $C=321$, $L=S=720$, $P=24$, $R=6$, $D=64$}
+%     $\text{MACs}_B\approx 2.8$M, $\text{MACs}_M\approx 21.0$M, tổng $\approx 23.8$M. \\
+%     So sánh: DLinear $2CLS\approx 333$M; DyTimeNet $\approx 212$M.
+%     \end{block}
+% \end{frame}
 
 %=====================================================================
 \section{Thực nghiệm và kết quả}
