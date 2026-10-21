@@ -70,7 +70,12 @@ def variants(dataset):
             for lr in TB_LRS} if dataset in TB_PERIOD else {}),
         # Cùng backbone, lịch train và siêu tham số chính thức của TimeBase; DyTimeBase chỉ thêm nhánh trộn kênh.
         **({"timebase_off": official(dataset, "timebase"),
-            "dytbase_off": official(dataset, "dytimebase", mix_lr=5e-4)} if dataset in TB_OFFICIAL else {}),
+            "dytbase_off": official(dataset, "dytimebase", mix_lr=5e-4),
+            # Ablation (mô hình đề xuất vẫn là dytbase_off): tắt từng khối của nhánh trộn kênh.
+            "dytbase_nocross": official(dataset, "dytimebase", mix_lr=5e-4, use_cross=False),
+            "dytbase_nointra": official(dataset, "dytimebase", mix_lr=5e-4, use_intra=False),
+            # Cùng kiến trúc, lr nhánh trộn kênh gấp 4 (lịch type3 giảm lr rất nhanh).
+            "dytbase_mixlr2e-3": official(dataset, "dytimebase", mix_lr=2e-3)} if dataset in TB_OFFICIAL else {}),
     }
 
 

@@ -26,7 +26,8 @@ class DyTimeBase(_Segmented):
     def __init__(self, num_vars: int, seq_len: int, pred_len: int, period: int = 24, basis_num: int = 6,
                  d_model: int = 64, p1: float = 0.1, p2: float = 0.1, hidden_ratio: float = 0.75,
                  ffn_ratio: float = 2.0, dropout: float = 0.1, cycle_len: int = 0, use_mix: bool = True,
-                 period_norm: bool = False, individual: bool = False, **_):
+                 period_norm: bool = False, individual: bool = False, use_cross: bool = True,
+                 use_intra: bool = True, **_):
         super().__init__(seq_len, pred_len, period)
         self.cycle_len, self.period_norm = cycle_len, period_norm
         if individual:   # backbone giống TimeBase individual = True
@@ -40,9 +41,10 @@ class DyTimeBase(_Segmented):
         if use_mix:
             feat = period * basis_num
             self.embed = nn.Linear(feat, d_model)
+            # use_cross / use_intra = False chỉ dùng cho ablation; mô hình đề xuất bật cả hai.
             self.cross = CrossVBlock(num_vars, d_model, p1=p1, p2=p2, hidden_ratio=hidden_ratio,
-                                     residual_from_norm=True)
-            self.intra = IntraVBlock(d_model, ffn_ratio=ffn_ratio, dropout=dropout)
+                                     residual_from_norm=True) if use_cross else nn.Identity()
+            self.intra = IntraVBlock(d_model, ffn_ratio=ffn_ratio, dropout=dropout) if use_intra else nn.Identity()
             self.out = nn.Linear(d_model, feat)
             nn.init.zeros_(self.out.weight)
             nn.init.zeros_(self.out.bias)

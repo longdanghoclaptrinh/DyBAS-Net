@@ -49,6 +49,8 @@ class ExperimentConfig:
     orth_weight: float = 0.0   # trọng số loss trực giao trên basis (TimeBase)
     lr_schedule: str = "cosine"   # cosine (mặc định) hoặc type3 (lịch của TimeBase/SparseTSF)
     grad_clip: float = 1.0     # chuẩn tối đa của gradient; 0 = không clip
+    use_cross: bool = True     # DyTimeBase: tắt CrossVBlock (chỉ để ablation)
+    use_intra: bool = True     # DyTimeBase: tắt IntraVBlock (chỉ để ablation)
 
     def validate(self):
         """Reject invalid settings before reading data or creating a checkpoint."""
@@ -81,7 +83,7 @@ class ExperimentConfig:
             raise ValueError("lr must be positive; weight_decay and min_delta cannot be negative")
         if self.ffn_ratio <= 0 or int(self.d_model * self.ffn_ratio) < 1 or self.hidden_ratio <= 0:
             raise ValueError("ffn_ratio and hidden_ratio must produce positive hidden dimensions")
-        for name in ("scale", "affine_revin", "period_norm", "individual"):
+        for name in ("scale", "affine_revin", "period_norm", "individual", "use_cross", "use_intra"):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f"{name} must be a boolean")
         for name in ("data_path", "save_dir"):
@@ -113,6 +115,8 @@ class ExperimentConfig:
                  "cross_residual", "cycle_len")
         if self.model in ("timebase", "sparsetsf", "dytimebase"):
             names += ("period", "basis_num", "period_norm", "individual")
+        if self.model == "dytimebase":
+            names += ("use_cross", "use_intra")
         return {"num_vars": num_vars, **{name: getattr(self, name) for name in names}}
 
     def to_dict(self):
