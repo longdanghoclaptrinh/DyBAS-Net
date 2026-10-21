@@ -315,8 +315,38 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
     \item \textbf{Cột} $n$: đoạn thứ $n$ (ví dụ ngày thứ $n$). \textbf{Hàng} $p$: cùng một pha (ví dụ cùng một giờ) qua $N$
           chu kỳ.
     \item Ví dụ ETTh1: $L=720$, $P=24$ $\Rightarrow$ $N=30$ cột, mỗi cột là một ngày.
-    \item Nếu $L$ không chia hết cho $P$, chuỗi được đệm thêm ở đầu cho đủ $N\cdot P$ điểm.
 \end{itemize}
+\end{frame}
+
+\begin{frame}{1. Phân đoạn theo chu kỳ: cách đọc chỉ số}
+\begin{center}
+\begin{tabular}{@{}c@{}}
+$\big[\mathbf{X}^{(i)}\big]_{p,n} = x^{(i)}_{(n-1)P+p}$
+\end{tabular}
+\end{center}
+
+\begin{itemize}
+    \item Phần tử ở \textbf{hàng $p$, cột $n$} là giá trị ở \textbf{giờ thứ $p$ của ngày thứ $n$}.
+    \item Trước ngày thứ $n$ có $(n-1)$ ngày đầy đủ, tức $(n-1)P$ điểm. Đi thêm $p$ bước vào ngày $n$ là tới vị trí
+          $(n-1)P+p$ trong chuỗi gốc.
+\end{itemize}
+
+\vspace{0.15cm}
+\begin{block}{Ví dụ ETTh1 ($P=24$)}
+\begin{center}
+\begin{tabular}{@{}cccl@{}}
+\toprule
+Hàng $p$ (giờ) & Cột $n$ (ngày) & Vị trí $(n-1)P+p$ & Phần tử\\
+\midrule
+$1$ (0h) & $1$ & $0\cdot24+1 = 1$ & $x_1$\\
+$2$ (1h) & $3$ & $2\cdot24+2 = 50$ & $x_{50}$\\
+$24$ (23h) & $30$ & $29\cdot24+24 = 720$ & $x_{720}$\\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{block}
+
+\small Đọc ngang một hàng: cùng một giờ qua 30 ngày. Đọc dọc một cột: diễn biến trong một ngày.
 \end{frame}
 
 \begin{frame}{2. Chuẩn hóa theo pha}
@@ -658,24 +688,9 @@ Biến đổi theo trục thời gian chạy trên $N$, $R$, $P$ (vài chục) t
     \item \textbf{Đề xuất DyBAS-Net:} kết hợp dự báo theo đoạn dựa trên thành phần cơ sở (TimeBase) với học phụ thuộc chéo
           có điều chuẩn thưa (CrossVBlock, DropFusion, IntraVBlock của DyTimeNet), đặt trong \emph{không gian cơ sở}.
     \item \textbf{Rất nhẹ:} 23.8M MACs, 0.66 ms một mẫu trên CPU ở cấu hình Electricity; nhanh thứ hai trong 13 mô hình,
-          nhanh hơn các mô hình sâu (iTransformer, TimeMixer, PatchTST, TimesNet) từ 16 đến hơn 5\,000 lần.
-    \item \textbf{Chính xác cạnh tranh:} MSE tốt nhất trên ETTh1 và ETTm1, thứ hai trên Weather; vượt TimeMixer,
-          iTransformer, TimesNet, FEDformer, Autoformer, Informer và DLinear; ngang ngửa SparseTSF, FITS, PatchTST.
+          nhanh hơn các mô hình iTransformer, TimeMixer, PatchTST, TimesNet từ 16 đến hơn 5\,000 lần.
     \item \textbf{Nhánh trộn biến có ích:} so với TimeBase cùng quy trình, giảm MSE trung bình trên 3/5 bộ dữ liệu (tới
           $4.5\%$ trên ETTm1).
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Hạn chế}
-\begin{itemize}
-    \item \textbf{Chưa vượt trội trên mọi bộ dữ liệu:} kém TimeBase trên ETTm2, Weather; kém các mô hình tuyến tính
-          mạnh trên ETTh2, ETTm2.
-    \item \textbf{Quá khớp trên dữ liệu trơn:} trên ETTm2, nhánh phi tuyến làm MSE tăng $3.7\%$ so với TimeBase.
-    \item \textbf{Mức cải thiện nhỏ:} so với TimeBase, MSE trung bình chỉ giảm $1.3$--$4.5\%$ trên các bộ dữ liệu được cải
-          thiện.
-    \item \textbf{Chậm hơn TimeBase} khoảng 2 lần, cái giá của nhánh trộn biến.
-    \item \textbf{Phạm vi đánh giá:} độ chính xác của 10 mô hình so sánh là số trích dẫn, không chạy lại; hiệu năng đo
-          trên CPU (Epoch Time là ước tính từ thời gian một bước huấn luyện).
 \end{itemize}
 \end{frame}
 
