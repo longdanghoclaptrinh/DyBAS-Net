@@ -315,39 +315,12 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
     \item \textbf{Cột} $n$: đoạn thứ $n$ (ví dụ ngày thứ $n$). \textbf{Hàng} $p$: cùng một pha (ví dụ cùng một giờ) qua $N$
           chu kỳ.
     \item Ví dụ ETTh1: $L=720$, $P=24$ $\Rightarrow$ $N=30$ cột, mỗi cột là một ngày.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{1. Phân đoạn theo chu kỳ: cách đọc chỉ số}
-\begin{center}
-\begin{tabular}{@{}c@{}}
-$\big[\mathbf{X}^{(i)}\big]_{p,n} = x^{(i)}_{(n-1)P+p}$
-\end{tabular}
-\end{center}
-
-\begin{itemize}
-    \item Phần tử ở \textbf{hàng $p$, cột $n$} là giá trị ở \textbf{giờ thứ $p$ của ngày thứ $n$}.
-    \item Trước ngày thứ $n$ có $(n-1)$ ngày đầy đủ, tức $(n-1)P$ điểm. Đi thêm $p$ bước vào ngày $n$ là tới vị trí
+    \item $\big[\mathbf{X}^{(i)}\big]_{p,n}$: phần tử ở hàng $p$, cột $n$ là giá trị ở giờ thứ $p$ của ngày thứ $n$.
+          Trước ngày thứ $n$ có $(n-1)$ ngày đầy đủ, tức $(n-1)P$ điểm; đi thêm $p$ bước vào ngày $n$ là tới vị trí
           $(n-1)P+p$ trong chuỗi gốc.
 \end{itemize}
-
-\vspace{0.15cm}
-\begin{block}{Ví dụ ETTh1 ($P=24$)}
-\begin{center}
-\begin{tabular}{@{}cccl@{}}
-\toprule
-Hàng $p$ (giờ) & Cột $n$ (ngày) & Vị trí $(n-1)P+p$ & Phần tử\\
-\midrule
-$1$ (0h) & $1$ & $0\cdot24+1 = 1$ & $x_1$\\
-$2$ (1h) & $3$ & $2\cdot24+2 = 50$ & $x_{50}$\\
-$24$ (23h) & $30$ & $29\cdot24+24 = 720$ & $x_{720}$\\
-\bottomrule
-\end{tabular}
-\end{center}
-\end{block}
-
-\small Đọc ngang một hàng: cùng một giờ qua 30 ngày. Đọc dọc một cột: diễn biến trong một ngày.
 \end{frame}
+
 
 \begin{frame}{2. Chuẩn hóa theo pha}
 \begin{itemize}
