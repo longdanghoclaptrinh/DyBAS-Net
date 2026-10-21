@@ -38,9 +38,9 @@ def mark_color(values, v, digits=3, third=False):
     ranked = sorted({round(x, digits) for x in values})
     s = f"{v:.{digits}f}"
     if round(v, digits) == ranked[0]:
-        return rf"\textcolor{{red}}{{\textbf{{{s}}}}}"
+        return rf"\textcolor[HTML]{{C00000}}{{\textbf{{{s}}}}}"
     if len(ranked) > 1 and round(v, digits) == ranked[1]:
-        return rf"\textcolor{{blue}}{{{s}}}"
+        return rf"\textcolor[HTML]{{0033CC}}{{\textbf{{{s}}}}}"
     if third and len(ranked) > 2 and round(v, digits) == ranked[2]:
         return rf"\textcolor{{Chocolate}}{{{s}}}"
     return s
