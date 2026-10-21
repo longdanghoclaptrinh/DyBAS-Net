@@ -609,7 +609,7 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 \begin{itemize}
     \item \textbf{Hơn hẳn:} TimeMixer, iTransformer, TimesNet, FEDformer, Autoformer, Informer (20/20) và DLinear (17/20).
     \item \textbf{Ngang ngửa:} SparseTSF, FITS, PatchTST (thắng trên ETTh1, ETTm1, Weather; thua trên ETTh2, ETTm2).
-    \item \textbf{So với TimeBase$^{*}$ (cùng quy trình):} thắng 12/20; tốt hơn trên ETTh1, ETTh2, ETTm1, kém hơn trên
+    \item \textbf{So với TimeBase (cùng quy trình):} thắng 12/20; tốt hơn trên ETTh1, ETTh2, ETTm1, kém hơn trên
           ETTm2, Weather.
 \end{itemize}
 \end{frame}
@@ -659,9 +659,9 @@ Biến đổi theo trục thời gian chạy trên $N$, $R$, $P$ (vài chục) t
 
 \begin{frame}{Hạn chế}
 \begin{itemize}
-    \item \textbf{Chưa vượt trội trên mọi bộ dữ liệu:} kém TimeBase$^{*}$ trên ETTm2, Weather; kém các mô hình tuyến tính
+    \item \textbf{Chưa vượt trội trên mọi bộ dữ liệu:} kém TimeBase trên ETTm2, Weather; kém các mô hình tuyến tính
           mạnh trên ETTh2, ETTm2.
-    \item \textbf{Quá khớp trên dữ liệu trơn:} trên ETTm2, nhánh phi tuyến làm MSE tăng $3.7\%$ so với TimeBase$^{*}$.
+    \item \textbf{Quá khớp trên dữ liệu trơn:} trên ETTm2, nhánh phi tuyến làm MSE tăng $3.7\%$ so với TimeBase.
     \item \textbf{Mức cải thiện nhỏ:} các chênh lệch trong ablation ($0.3$--$1.1\%$) cùng cỡ độ lệch chuẩn giữa các seed.
     \item \textbf{Chậm hơn TimeBase} khoảng 2 lần, cái giá của nhánh trộn biến.
     \item \textbf{Phạm vi đánh giá:} số liệu của 10 mô hình lớn là số trích dẫn; hiệu năng đo trên CPU (Epoch Time

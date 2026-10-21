@@ -16,7 +16,7 @@ from run_suite import TB_INDIVIDUAL, TB_OFFICIAL  # noqa: E402
 
 OUT = Path("slide/tables")
 SHOWN = [c for c in COLS if c != "TimeBase"]   # chỉ giữ TimeBase đo trên máy này (TimeBase*)
-NAME = {"DyTimeBase": r"\textbf{DyBAS-Net}", "TimeBase*": r"TimeBase$^{*}$", "TimeBase": r"TimeBase$^{\dagger}$"}
+NAME = {"DyTimeBase": r"\textbf{DyBAS-Net}", "TimeBase*": r"TimeBase", "TimeBase": r"TimeBase$^{\dagger}$"}
 STRONG = ["DyTimeBase", "TimeBase*", "SparseTSF", "FITS", "PatchTST", "iTransformer", "DLinear",
           "TimeMixer"]
 
@@ -130,7 +130,7 @@ def efficiency_table():
 def ablation_table(runs):
     labels = {"DyTimeBase (đầy đủ)": r"\textbf{DyBAS-Net (đầy đủ)}", "bỏ CrossV": r"\quad bỏ CrossVBlock",
               "bỏ IntraV": r"\quad bỏ IntraVBlock",
-              "bỏ cả nhánh trộn kênh (= TimeBase\\*)": r"\quad bỏ cả nhánh ($=$ TimeBase$^{*}$)",
+              "bỏ cả nhánh trộn kênh (= TimeBase\\*)": r"\quad bỏ cả nhánh ($=$ TimeBase)",
               "đầy đủ, mix_lr 2e-3": r"đầy đủ, $\alpha_M = 2\cdot10^{-3}$"}
     vals = {lab: [statistics.mean(runs[ds][f"{v}_S{h}_seed{s}"]["mse"] for h in HORIZONS for s in SEEDS)
                   for ds in DATASETS] for lab, v in ABLATION.items()}
