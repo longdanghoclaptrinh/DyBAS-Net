@@ -2,6 +2,8 @@
 
 DyTimeBase và TimeBase\* tự chạy trong cùng pipeline (siêu tham số chính thức của TimeBase, trung bình 3 seed 2021–2023, CPU). Các cột còn lại là số công bố trong Table 10 của TimeBase (Huang et al., ICML 2025), cũng với L = 720 (cột TimeBase là số họ công bố, chạy 1 lần). **Đậm** = tốt nhất, <u>gạch chân</u> = thứ hai (làm tròn 3 chữ số).
 
+Siêu tham số của DyTimeBase: xương sống (P, R, lr, batch, λ_orth, lịch type3, 30 epoch, patience 5) theo script chính thức của TimeBase; nhánh trộn kênh giữ nguyên bộ đã tối ưu của DyTimeNet trong Đồ án I, Bảng 3.1 (d_model, p1, p2: ETTh1 64/0.1/0.1, ETTh2 64/0.6/0.6, ETTm1 64/0.1/0.2, ETTm2 32/0.1/0.1, Weather 64/0.1/0.1), lr nhánh trộn kênh 5e-4. Không tinh chỉnh thêm cho DyTimeBase.
+
 | Dataset | S | DyTimeBase MSE | DyTimeBase MAE | TimeBase* MSE | TimeBase* MAE | TimeBase MSE | TimeBase MAE | SparseTSF MSE | SparseTSF MAE | TimeMixer MSE | TimeMixer MAE | FITS MSE | FITS MAE | iTransformer MSE | iTransformer MAE | DLinear MSE | DLinear MAE | PatchTST MSE | PatchTST MAE | TimesNet MSE | TimesNet MAE | FEDformer MSE | FEDformer MAE | Autoformer MSE | Autoformer MAE | Informer MSE | Informer MAE |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | ETTh1 | 96 | **0.347** | <u>0.386</u> | 0.358 | **0.384** | <u>0.349</u> | **0.384** | 0.362 | 0.389 | 0.410 | 0.441 | 0.380 | 0.402 | 0.389 | 0.421 | 0.378 | 0.402 | 0.377 | 0.408 | 0.437 | 0.454 | 0.485 | 0.500 | 0.555 | 0.558 | 1.269 | 0.855 |
@@ -84,10 +86,10 @@ Số lần đứng nhất (40 ô = 5 dataset × 4 horizon × MSE/MAE, tính cả
 | Biến thể | ETTh1 | ETTh2 | ETTm1 | ETTm2 | Weather | Trung bình |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | DyTimeBase (đầy đủ) | 0.4030 | 0.3580 | 0.3509 | 0.2634 | 0.2211 | 0.3193 |
-| bỏ CrossV | 0.4028 | 0.3595 | 0.3554 | 0.2615 | chưa chạy | — |
-| bỏ IntraV | 0.4004 | 0.3668 | 0.3524 | 0.2661 | chưa chạy | — |
+| bỏ CrossV | 0.4028 | 0.3595 | 0.3554 | 0.2615 | 0.2226 | 0.3204 |
+| bỏ IntraV | 0.4004 | 0.3668 | 0.3524 | 0.2661 | 0.2186 | 0.3209 |
 | bỏ cả nhánh trộn kênh (= TimeBase\*) | 0.4105 | 0.3627 | 0.3674 | 0.2539 | 0.2195 | 0.3228 |
-| đầy đủ, mix_lr 2e-3 | 0.3992 | 0.3569 | 0.3554 | 0.2627 | chưa chạy | — |
+| đầy đủ, mix_lr 2e-3 | 0.3992 | 0.3569 | 0.3554 | 0.2627 | 0.2203 | 0.3189 |
 
 ## Tốc độ trên cùng máy (Electricity, C = 321, L = S = 720; chi tiết: results/bench_efficiency.md)
 

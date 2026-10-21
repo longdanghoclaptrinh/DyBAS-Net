@@ -101,6 +101,10 @@ def main():
              "2021–2023, CPU). Các cột còn lại là số công bố trong Table 10 của TimeBase (Huang et al., ICML 2025), cũng "
              "với L = 720 (cột TimeBase là số họ công bố, chạy 1 lần). **Đậm** = tốt nhất, <u>gạch chân</u> = thứ hai "
              "(làm tròn 3 chữ số).", "",
+             "Siêu tham số của DyTimeBase: xương sống (P, R, lr, batch, λ_orth, lịch type3, 30 epoch, patience 5) theo "
+             "script chính thức của TimeBase; nhánh trộn kênh giữ nguyên bộ đã tối ưu của DyTimeNet trong Đồ án I, "
+             "Bảng 3.1 (d_model, p1, p2: ETTh1 64/0.1/0.1, ETTh2 64/0.6/0.6, ETTm1 64/0.1/0.2, ETTm2 32/0.1/0.1, "
+             "Weather 64/0.1/0.1), lr nhánh trộn kênh 5e-4. Không tinh chỉnh thêm cho DyTimeBase.", "",
              "| Dataset | S | " + " | ".join(f"{c} MSE | {c} MAE" for c in cols) + " |",
              "| --- | --- |" + " ---: |" * (2 * len(cols))]
     wins = {c: 0 for c in cols}
