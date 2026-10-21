@@ -159,7 +159,7 @@
 Nhóm mô hình & Ví dụ & Rất nhẹ & Học quan hệ liên biến\\
 \midrule
 Tuyến tính theo đoạn / tần số, CI & TimeBase, SparseTSF, FITS & \textcolor{ForestGreen}{\checkmark} & \textcolor{mqred}{$\times$}\\
-Transformer & PatchTST, iTransformer & \textcolor{mqred}{$\times$} & một phần\\
+Transformer & PatchTST (CI), iTransformer (CD) & \textcolor{mqred}{$\times$} & một phần\\
 Đồ thị, lọc phụ thuộc theo patch & TimeFilter & \textcolor{mqred}{$\times$} & \textcolor{ForestGreen}{\checkmark}\\
 MLP trộn biến trên chuỗi gốc (chi phí theo $L$, $S$) & DyTimeNet & \textcolor{mqred}{$\times$} & \textcolor{ForestGreen}{\checkmark}\\
 \bottomrule
@@ -194,8 +194,8 @@ hướng tiếp cận:
     \item \textbf{Hiệu chỉnh có kiểm soát:} nhánh trộn biến chỉ cộng một lượng hiệu chỉnh vào các thành phần cơ sở, được
           khởi tạo bằng 0.
 
-    \item \textbf{Đánh giá toàn diện:} 5 bộ dữ liệu, so sánh với 11 mô hình về độ chính xác và chi phí tính toán trên
-          \emph{cùng một thiết bị}.
+    \item \textbf{Đánh giá toàn diện:} so sánh độ chính xác với 11 mô hình trên 5 bộ dữ liệu, và đo chi phí tính toán của
+          các mô hình trên \emph{cùng một thiết bị}.
 \end{itemize}
 \end{frame}
 
@@ -429,11 +429,11 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
     \vspace{0.15cm}
     \begin{itemize}
         \item \textbf{Giai đoạn 1 -- Mặt nạ Cạnh $\mathcal{M}_1\in\{0,1\}^{C\times C'}$:} mỗi phần tử bằng 0 với xác
-              suất $p_1$, tức tắt liên kết giữa một cặp biến. Lấy mẫu lại ở mỗi lô.
+              suất $p_1$, tức tắt liên kết giữa một cặp biến. Lấy mẫu lại ở mỗi lô dữ liệu.
         $$\mathbf{W}_{masked} = \mathbf{W}_{df,1} \odot \mathcal{M}_1$$
 
         \item \textbf{Giai đoạn 2 -- Mặt nạ Nút $\mathcal{M}_2\in\{0,1\}^{D\times C'}$:} mỗi phần tử bằng 0 với xác suất
-              $p_2$, tức tắt đầu ra của một số biến. Lấy mẫu lại ở mỗi mẫu.
+              $p_2$, tức tắt ngẫu nhiên từng phần tử đầu ra. Lấy mẫu riêng cho từng mẫu.
         $$\mathbf{Y}_{masked} = \big(\mathcal{X}'_{enc}\,\mathbf{W}_{masked} + \mathbf{b}_1\big) \odot \mathcal{M}_2$$
     \end{itemize}
     \small Lớp thứ hai làm tương tự, với đầu vào $\mathbf{H}$ và trọng số $\mathbf{W}_{df,2}$.
@@ -467,8 +467,8 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
         $$\mathcal{X}_{intra} = \mathcal{X}_{cross} + \mathcal{X}'_{enc} \quad \in \R^{D \times C}$$
 
         \item \textbf{Mạng truyền thẳng dùng chung}, áp dụng cho \emph{từng cột} (từng biến) $\mathbf{h}\in\R^{D}$:
-        $$\text{FFN}(\mathbf{h}) = \mathbf{W}_2\,\text{GELU}(\mathbf{W}_1\mathbf{h} + \mathbf{b}_1) + \mathbf{b}_2,
-          \qquad \mathbf{W}_1\in\R^{D_{ff}\times D},\ \mathbf{W}_2\in\R^{D\times D_{ff}}$$
+        $$\text{FFN}(\mathbf{h}) = \mathbf{W}_4\,\text{GELU}(\mathbf{W}_3\mathbf{h} + \mathbf{b}_3) + \mathbf{b}_4,
+          \qquad \mathbf{W}_3\in\R^{D_{ff}\times D},\ \mathbf{W}_4\in\R^{D\times D_{ff}}$$
 
         \item \textbf{Đầu ra} (LayerNorm phía trước, thặng dư phía sau):
         $$\hat{\mathcal{X}}_{intra} = \mathcal{X}_{intra} + \text{FFN}\big(\operatorname{LN}(\mathcal{X}_{intra})\big)
@@ -515,7 +515,8 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 
 \begin{frame}{Điều chỉnh và Tối ưu hóa Trọng số}
     \begin{itemize}
-        \item Trọng số được cập nhật ngược hướng gradient của hàm mục tiêu $\mathcal{L}$:
+        \item Trọng số được cập nhật ngược hướng gradient của hàm mục tiêu $\mathcal{L}$ (dạng cơ bản; thực tế dùng bộ tối
+              ưu Adam):
         \[ W_{k+1} = W_k - \alpha \frac{\partial \mathcal{L}}{\partial W_k}, \qquad
            b_{k+1} = b_k - \alpha \frac{\partial \mathcal{L}}{\partial b_k} \]
 
@@ -583,7 +584,7 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
     \item \textbf{Độ chính xác:} MSE và MAE:
     $$\text{MSE} = \frac{1}{n}\sum_{i=1}^{n}(y_i-\hat{y}_i)^2, \qquad \text{MAE} = \frac{1}{n}\sum_{i=1}^{n}|y_i-\hat{y}_i|$$
 
-    \item \textbf{Hiệu năng} Cấu hình chung ($C=321$, $L=S=720$):
+    \item \textbf{Hiệu năng}, đo theo cấu hình của TimeBase\refnote{Huang2025TimeBase}: Electricity ($C=321$, $L=S=720$):
     \begin{itemize}
         \item \textbf{Params}: số tham số; \textbf{MACs}: số phép nhân--cộng cho một mẫu.
         \item \textbf{Epoch Time}: thời gian một epoch huấn luyện; \textbf{Infer Time}: dự báo một mẫu trên CPU.
@@ -596,6 +597,14 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 \begin{frame}{Kết quả: MSE / MAE trung bình trên 4 độ dài dự báo}
 \scriptsize
 \input{tables/avg.tex}
+
+\vspace{0.1cm}
+DyBAS-Net và TimeBase: tự chạy, trung bình 3 seed. Các mô hình dưới vạch kẻ: số công bố trong
+\cite{Huang2025TimeBase} (cùng $L=720$): SparseTSF \cite{Lin2024SparseTSF}, TimeMixer \cite{Wang2024TimeMixer},
+FITS \cite{Xu2024FITS}, iTransformer \cite{Liu2024iTransformer}, DLinear \cite{Zeng2023DLinear},
+PatchTST \cite{Nie2023PatchTST}, TimesNet \cite{Wu2023TimesNet}, FEDformer \cite{Zhou2022FEDformer},
+Autoformer \cite{Wu2021Autoformer}, Informer \cite{Zhou2021Informer}.
+\textcolor{red}{\textbf{Đỏ}}: tốt nhất; \textcolor{blue}{xanh}: thứ hai.
 \end{frame}
 
 
@@ -603,9 +612,11 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 \scriptsize
 \input{tables/h2h.tex}
 
-\vspace{0.15cm}
+\vspace{0.1cm}
+Thắng/Hòa/Thua: đếm trên 20 ô (5 bộ dữ liệu $\times$ 4 độ dài dự báo) theo MSE, làm tròn 3 chữ số.
+
+\vspace{0.1cm}
 \small
-Đếm trên 20 ô (5 bộ dữ liệu $\times$ 4 độ dài dự báo) theo MSE, làm tròn 3 chữ số.
 \begin{itemize}
     \item \textbf{Hơn hẳn:} TimeMixer, iTransformer, TimesNet, FEDformer, Autoformer, Informer (20/20) và DLinear (17/20).
     \item \textbf{Ngang ngửa:} SparseTSF, FITS, PatchTST (thắng trên ETTh1, ETTm1, Weather; thua trên ETTh2, ETTm2).
@@ -623,17 +634,15 @@ Electricity ($C=321$), $L=S=720$. Epoch Time: thời gian một bước huấn l
 \vspace{0.1cm}
 \input{tables/efficiency.tex}
 
-\vspace{0.05cm}
-{\tiny $^{\ddagger}$ Không đủ bộ nhớ để huấn luyện với lô 12; Epoch Time đo ở lô 4.}
 \end{frame}
 
 \begin{frame}{Nhận xét hiệu năng}
 \begin{itemize}
     \item DyBAS-Net \textbf{nhanh thứ hai trong 13 mô hình} khi suy luận (0.66 ms một mẫu), chỉ sau TimeBase (0.34 ms).
     \item Nhanh hơn SparseTSF (0.76 ms), FITS (1.70 ms), DLinear (1.93 ms).
-    \item So với Transformer: nhanh hơn iTransformer $\sim$16 lần, TimeMixer $\sim$377 lần, PatchTST $\sim$434 lần.
-    \item Huấn luyện nhẹ: 38 s một epoch (PatchTST: khoảng 23 giờ một epoch).
-    \item So với DyTimeNet (Đồ án I): ít hơn $\sim$4.1 lần tham số, $\sim$8.9 lần MACs, suy luận nhanh hơn $\sim$3.2 lần.
+    \item So với các mô hình sâu: nhanh hơn iTransformer $\sim$16 lần, TimeMixer $\sim$377 lần, PatchTST $\sim$434 lần,
+          TimesNet hơn 5\,000 lần.
+    \item Huấn luyện nhẹ: 38 s một epoch.
 \end{itemize}
 
 \begin{block}{Nguyên nhân}
@@ -649,11 +658,11 @@ Biến đổi theo trục thời gian chạy trên $N$, $R$, $P$ (vài chục) t
     \item \textbf{Đề xuất DyBAS-Net:} kết hợp dự báo theo đoạn dựa trên thành phần cơ sở (TimeBase) với học phụ thuộc chéo
           có điều chuẩn thưa (CrossVBlock, DropFusion, IntraVBlock của DyTimeNet), đặt trong \emph{không gian cơ sở}.
     \item \textbf{Rất nhẹ:} 23.8M MACs, 0.66 ms một mẫu trên CPU ở cấu hình Electricity; nhanh thứ hai trong 13 mô hình,
-          nhanh hơn các mô hình Transformer từ 16 đến hàng nghìn lần.
-    \item \textbf{Chính xác cạnh tranh:} MSE tốt nhất trên ETTh1 và ETTm1, thứ hai trên Weather; vượt toàn bộ mô hình
-          Transformer và DLinear; ngang ngửa SparseTSF, FITS, PatchTST.
-    \item \textbf{Nhánh trộn biến có ích:} so với TimeBase cùng quy trình, giảm MSE trên 3/5 bộ dữ liệu (tới $4.5\%$ trên
-          ETTm1); ablation cho thấy cả CrossVBlock và IntraVBlock đều đóng góp.
+          nhanh hơn các mô hình sâu (iTransformer, TimeMixer, PatchTST, TimesNet) từ 16 đến hơn 5\,000 lần.
+    \item \textbf{Chính xác cạnh tranh:} MSE tốt nhất trên ETTh1 và ETTm1, thứ hai trên Weather; vượt TimeMixer,
+          iTransformer, TimesNet, FEDformer, Autoformer, Informer và DLinear; ngang ngửa SparseTSF, FITS, PatchTST.
+    \item \textbf{Nhánh trộn biến có ích:} so với TimeBase cùng quy trình, giảm MSE trung bình trên 3/5 bộ dữ liệu (tới
+          $4.5\%$ trên ETTm1).
 \end{itemize}
 \end{frame}
 
@@ -662,10 +671,11 @@ Biến đổi theo trục thời gian chạy trên $N$, $R$, $P$ (vài chục) t
     \item \textbf{Chưa vượt trội trên mọi bộ dữ liệu:} kém TimeBase trên ETTm2, Weather; kém các mô hình tuyến tính
           mạnh trên ETTh2, ETTm2.
     \item \textbf{Quá khớp trên dữ liệu trơn:} trên ETTm2, nhánh phi tuyến làm MSE tăng $3.7\%$ so với TimeBase.
-    \item \textbf{Mức cải thiện nhỏ:} các chênh lệch trong ablation ($0.3$--$1.1\%$) cùng cỡ độ lệch chuẩn giữa các seed.
+    \item \textbf{Mức cải thiện nhỏ:} so với TimeBase, MSE trung bình chỉ giảm $1.3$--$4.5\%$ trên các bộ dữ liệu được cải
+          thiện.
     \item \textbf{Chậm hơn TimeBase} khoảng 2 lần, cái giá của nhánh trộn biến.
-    \item \textbf{Phạm vi đánh giá:} số liệu của 10 mô hình lớn là số trích dẫn; hiệu năng đo trên CPU (Epoch Time
-          là ước tính từ thời gian một bước huấn luyện).
+    \item \textbf{Phạm vi đánh giá:} độ chính xác của 10 mô hình so sánh là số trích dẫn, không chạy lại; hiệu năng đo
+          trên CPU (Epoch Time là ước tính từ thời gian một bước huấn luyện).
 \end{itemize}
 \end{frame}
 
