@@ -38,3 +38,10 @@ Thumbs.db
 *.toc
 *.fls
 *.fdb_latexmk
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+*.nav
+*.snm
+*.vrb
