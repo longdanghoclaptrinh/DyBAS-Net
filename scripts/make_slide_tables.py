@@ -32,6 +32,15 @@ def mark(values, v, digits=3):
     return rf"\underline{{{s}}}" if len(ranked) > 1 and round(v, digits) == ranked[1] else s
 
 
+def mark_color(values, v, digits=3):
+    """Đỏ đậm = tốt nhất, xanh dương = thứ hai (so sau khi làm tròn)."""
+    ranked = sorted({round(x, digits) for x in values})
+    s = f"{v:.{digits}f}"
+    if round(v, digits) == ranked[0]:
+        return rf"\textcolor{{red}}{{\textbf{{{s}}}}}"
+    return rf"\textcolor{{blue}}{{{s}}}" if len(ranked) > 1 and round(v, digits) == ranked[1] else s
+
+
 def wrap(body, cols, width=r"\textwidth"):
     return "\n".join([rf"\resizebox{{{width}}}{{!}}{{%", rf"\begin{{tabular}}{{{cols}}}", r"\toprule", *body,
                       r"\bottomrule", r"\end{tabular}}"]) + "\n"
@@ -42,13 +51,14 @@ def avg_table(table):
             "".join(rf"\cmidrule(lr){{{2 + 2 * k}-{3 + 2 * k}}}" for k in range(len(DATASETS))),
             " & " + " & ".join("MSE & MAE" for _ in DATASETS) + r"\\", r"\midrule"]
     rows = []
-    for c in COLS:
+    cols = [c for c in COLS if c != "TimeBase"]          # chỉ giữ TimeBase đo trên máy này (TimeBase*)
+    for c in cols:
         cells = []
         for ds in DATASETS:
             for i in (0, 1):
-                cells.append(mark([table[(ds, "Avg")][k][i] for k in COLS], table[(ds, "Avg")][c][i]))
+                cells.append(mark_color([table[(ds, "Avg")][k][i] for k in cols], table[(ds, "Avg")][c][i]))
         rows.append(f"{name(c)} & " + " & ".join(cells) + r"\\")
-        if c == "TimeBase":
+        if c == "TimeBase*":
             rows.append(r"\midrule")
     return wrap(head + rows, "l" + "cc" * len(DATASETS))
 
@@ -137,9 +147,9 @@ def ablation_table(runs):
 
 
 def hparam_table():
-    head = [r" & \multicolumn{3}{c}{Xương sống (theo $S=96/192/336/720$)} & \multicolumn{3}{c}{Nhánh trộn kênh}\\",
+    head = [r" & \multicolumn{3}{c}{Theo $S=96/192/336/720$} & \multicolumn{3}{c}{Nhánh trộn biến}\\",
             r"\cmidrule(lr){2-4}\cmidrule(l){5-7}",
-            r"Dataset & $P$ & $R$ & Riêng kênh & $D$ & $p_1$ & $p_2$\\", r"\midrule"]
+            r"Dataset & $P$ & $R$ & Riêng biến & $D$ & $p_1$ & $p_2$\\", r"\midrule"]
     rows = []
     for ds in DATASETS:
         v = [TB_OFFICIAL[ds][int(h)] for h in HORIZONS]
