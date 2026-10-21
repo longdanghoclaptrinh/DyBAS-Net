@@ -1,0 +1,11 @@
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llccccccccc}
+\toprule
+Dataset & $S$ & \textbf{DyBAS-Net} & TimeBase$^{*}$ & TimeBase$^{\dagger}$ & SparseTSF & FITS & PatchTST & iTransformer & DLinear & TimeMixer\\
+\midrule
+\multirow{4}{*}{Weather} & 96 & \textbf{0.143} & \underline{0.144} & 0.146 & 0.174 & 0.176 & 0.149 & 0.159 & 0.174 & 0.163\\
+ & 192 & \underline{0.187} & \underline{0.187} & \textbf{0.185} & 0.216 & 0.216 & 0.193 & 0.203 & 0.215 & 0.201\\
+ & 336 & 0.240 & \underline{0.238} & \textbf{0.236} & 0.260 & 0.261 & 0.240 & 0.253 & 0.262 & 0.258\\
+ & 720 & 0.314 & \textbf{0.309} & \textbf{0.309} & 0.325 & 0.325 & \underline{0.312} & 0.317 & 0.319 & 0.329\\
+\bottomrule
+\end{tabular}}
