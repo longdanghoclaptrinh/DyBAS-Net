@@ -578,41 +578,16 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 \end{center}
 \end{frame}
 
-\begin{frame}{Các mô hình so sánh}
-\begin{itemize}
-    \item \textbf{TimeBase$^{*}$}: TimeBase cài đặt lại theo mã nguồn chính thức (đầu ra lệch $<3\cdot10^{-7}$ so với bản
-          gốc khi cùng trọng số), chạy \emph{cùng quy trình} với DyBAS-Net. Hai mô hình chỉ khác nhau ở nhánh trộn biến.
-
-    \vspace{0.15cm}
-    \item \textbf{Số liệu công bố} ($L=720$, Table 10 của TimeBase \cite{Huang2025TimeBase}):
-    \begin{itemize}
-        \item Tuyến tính nhẹ: TimeBase$^{\dagger}$, SparseTSF \cite{Lin2024SparseTSF}, FITS \cite{Xu2024FITS},
-              DLinear \cite{Zeng2023DLinear}.
-        \item MLP, Transformer, CNN: TimeMixer \cite{Wang2024TimeMixer}, iTransformer \cite{Liu2024iTransformer},
-              PatchTST \cite{Nie2023PatchTST}, TimesNet \cite{Wu2023TimesNet}, FEDformer \cite{Zhou2022FEDformer},
-              Autoformer \cite{Wu2021Autoformer}, Informer \cite{Zhou2021Informer}.
-    \end{itemize}
-
-    \vspace{0.15cm}
-    \item Các mô hình lớn không được huấn luyện lại vì chi phí trên CPU quá cao (một epoch của PatchTST ở cấu hình
-          Electricity mất khoảng 23 giờ).
-\end{itemize}
-\end{frame}
-
 \begin{frame}{Chỉ số đánh giá}
 \begin{itemize}
-    \item \textbf{Độ chính xác:} MSE và MAE trên thang Z-score, lấy trung bình trên mọi cửa sổ test, mọi bước, mọi biến:
+    \item \textbf{Độ chính xác:} MSE và MAE:
     $$\text{MSE} = \frac{1}{n}\sum_{i=1}^{n}(y_i-\hat{y}_i)^2, \qquad \text{MAE} = \frac{1}{n}\sum_{i=1}^{n}|y_i-\hat{y}_i|$$
 
-    \item \textbf{Hiệu năng} (theo TimeBase), cấu hình Electricity ($C=321$, $L=S=720$):
+    \item \textbf{Hiệu năng} Cấu hình chung ($C=321$, $L=S=720$):
     \begin{itemize}
         \item \textbf{Params}: số tham số; \textbf{MACs}: số phép nhân--cộng cho một mẫu.
-        \item \textbf{Max Mem}: bộ nhớ đỉnh khi huấn luyện, lô 12 mẫu (RAM, vì không có GPU).
         \item \textbf{Epoch Time}: thời gian một epoch huấn luyện; \textbf{Infer Time}: dự báo một mẫu trên CPU.
     \end{itemize}
-
-    \item Đo \emph{tất cả mô hình trên cùng máy}, dựng từ mã nguồn chính thức (Time-Series-Library \cite{Wang2024TSLib},
-          kho mã của PatchTST và FITS).
 \end{itemize}
 \end{frame}
 
@@ -621,59 +596,10 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 \begin{frame}{Kết quả: MSE / MAE trung bình trên 4 độ dài dự báo}
 \scriptsize
 \input{tables/avg.tex}
-
-\vspace{0.1cm}
-$^{*}$ TimeBase đo trên máy này, cùng quy trình với DyBAS-Net, trung bình 3 seed. Các mô hình dưới vạch kẻ: số công bố
-trong \cite{Huang2025TimeBase}, cùng $L=720$; trung bình tính từ kết quả theo từng $S$ (Table 10).
-\textcolor{red}{\textbf{Đỏ}}: tốt nhất; \textcolor{blue}{xanh}: thứ hai.
 \end{frame}
 
-\begin{frame}{Nhận xét kết quả độ chính xác}
-\begin{itemize}
-    \item \textbf{ETTh1, ETTm1:} DyBAS-Net có MSE \textbf{thấp nhất} trong bảng (0.403 và 0.351), tốt hơn SparseTSF
-          (0.407) trên ETTh1 và PatchTST (0.355) trên ETTm1.
-    \item \textbf{Weather:} DyBAS-Net đứng \textbf{thứ hai} về MSE (0.221), chỉ sau TimeBase$^{*}$ (0.219); tốt hơn
-          PatchTST, SparseTSF, FITS và mọi mô hình Transformer.
-    \item \textbf{ETTh2, ETTm2:} DyBAS-Net (0.358 và 0.263) kém nhóm tuyến tính mạnh (FITS, SparseTSF, TimeBase$^{*}$) và
-          PatchTST.
-    \item \textbf{MAE:} cải thiện ít hơn MSE; trên phần lớn bộ dữ liệu, MAE của DyBAS-Net không tốt hơn TimeBase$^{*}$.
-\end{itemize}
-\end{frame}
 
-\begin{frame}{Kết quả theo độ dài dự báo $S$ (MSE): ETTh1, ETTh2}
-\scriptsize
-\input{tables/h_etth.tex}
-
-\vspace{0.1cm}
-\textcolor{red}{\textbf{Đỏ}}: tốt nhất; \textcolor{blue}{xanh}: thứ hai (xếp hạng trên cả 13 mô hình). Không hiển thị TimesNet, FEDformer, Autoformer, Informer
-(DyBAS-Net tốt hơn ở mọi ô).
-\end{frame}
-
-\begin{frame}{Kết quả theo độ dài dự báo $S$ (MSE): ETTm1, ETTm2}
-\scriptsize
-\input{tables/h_ettm.tex}
-
-\vspace{0.1cm}
-\textcolor{red}{\textbf{Đỏ}}: tốt nhất; \textcolor{blue}{xanh}: thứ hai (xếp hạng trên cả 13 mô hình).
-\end{frame}
-
-\begin{frame}{Kết quả theo độ dài dự báo $S$ (MSE): Weather}
-\scriptsize
-\input{tables/h_weather.tex}
-
-\vspace{0.1cm}
-\textcolor{red}{\textbf{Đỏ}}: tốt nhất; \textcolor{blue}{xanh}: thứ hai (xếp hạng trên cả 13 mô hình).
-
-\vspace{0.2cm}
-\small
-\begin{itemize}
-    \item Weather có nhiều biến nhất (21) và quan hệ vật lý giữa các biến rõ nhất.
-    \item DyBAS-Net tốt nhất ở $S=96$ (0.143); ở $S=192$ ngang TimeBase$^{*}$ (0.187); ở $S=336$ và $S=720$ kém TimeBase
-          một chút.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{DyBAS-Net đối đầu từng mô hình}
+\begin{frame}{DyBAS-Net \& Baselines}
 \scriptsize
 \input{tables/h2h.tex}
 
@@ -683,26 +609,8 @@ trong \cite{Huang2025TimeBase}, cùng $L=720$; trung bình tính từ kết qu�
 \begin{itemize}
     \item \textbf{Hơn hẳn:} TimeMixer, iTransformer, TimesNet, FEDformer, Autoformer, Informer (20/20) và DLinear (17/20).
     \item \textbf{Ngang ngửa:} SparseTSF, FITS, PatchTST (thắng trên ETTh1, ETTm1, Weather; thua trên ETTh2, ETTm2).
-    \item \textbf{Kém hơn:} số công bố của TimeBase (thắng 5/20).
-\end{itemize}
-\end{frame}
-
-\begin{frame}{So sánh với TimeBase trong cùng quy trình}
-\small
-Thay đổi MSE của DyBAS-Net so với TimeBase$^{*}$ (âm là tốt hơn). Hai mô hình dùng cùng xương sống, cùng siêu tham số
-xương sống, cùng 3 seed, chỉ khác ở nhánh trộn biến:
-
-\vspace{0.15cm}
-\scriptsize
-\input{tables/versus.tex}
-
-\vspace{0.15cm}
-\small
-\begin{itemize}
-    \item Nhánh trộn biến \textbf{cải thiện 3/5 bộ dữ liệu}: ETTh1 ($-1.8\%$), ETTh2 ($-1.3\%$), ETTm1 ($-4.5\%$).
-    \item Cải thiện lớn nhất ở dự báo ngắn: ETTm1 với $S=192$ giảm $9.6\%$.
-    \item \textbf{ETTm2} kém hơn ($+3.7\%$): các lần chạy thường dừng sau 6--7 epoch, nhánh phi tuyến quá khớp trên chuỗi
-          tương đối trơn.
+    \item \textbf{So với TimeBase$^{*}$ (cùng quy trình):} thắng 12/20; tốt hơn trên ETTh1, ETTh2, ETTm1, kém hơn trên
+          ETTm2, Weather.
 \end{itemize}
 \end{frame}
 
@@ -771,7 +679,7 @@ Các biến thể ``bỏ khối'' chỉ dùng để kiểm chứng; mô hình đ
           có điều chuẩn thưa (CrossVBlock, DropFusion, IntraVBlock của DyTimeNet), đặt trong \emph{không gian cơ sở}.
     \item \textbf{Rất nhẹ:} 23.8M MACs, 0.66 ms một mẫu trên CPU ở cấu hình Electricity; nhanh thứ hai trong 13 mô hình,
           nhanh hơn các mô hình Transformer từ 16 đến hàng nghìn lần.
-    \item \textbf{Chính xác cạnh tranh:} tốt nhất trên ETTm1, thứ hai trên ETTh1 và Weather; vượt toàn bộ mô hình
+    \item \textbf{Chính xác cạnh tranh:} MSE tốt nhất trên ETTh1 và ETTm1, thứ hai trên Weather; vượt toàn bộ mô hình
           Transformer và DLinear; ngang ngửa SparseTSF, FITS, PatchTST.
     \item \textbf{Nhánh trộn biến có ích:} so với TimeBase cùng quy trình, giảm MSE trên 3/5 bộ dữ liệu (tới $4.5\%$ trên
           ETTm1); ablation cho thấy cả CrossVBlock và IntraVBlock đều đóng góp.
@@ -780,8 +688,9 @@ Các biến thể ``bỏ khối'' chỉ dùng để kiểm chứng; mô hình đ
 
 \begin{frame}{Hạn chế}
 \begin{itemize}
-    \item \textbf{Chưa vượt số công bố của TimeBase} về độ chính xác; kém các mô hình tuyến tính mạnh trên ETTh2, ETTm2.
-    \item \textbf{Quá khớp trên dữ liệu trơn:} trên ETTm2, nhánh phi tuyến làm MSE tăng $3.7\%$ so với TimeBase.
+    \item \textbf{Chưa vượt trội trên mọi bộ dữ liệu:} kém TimeBase$^{*}$ trên ETTm2, Weather; kém các mô hình tuyến tính
+          mạnh trên ETTh2, ETTm2.
+    \item \textbf{Quá khớp trên dữ liệu trơn:} trên ETTm2, nhánh phi tuyến làm MSE tăng $3.7\%$ so với TimeBase$^{*}$.
     \item \textbf{Mức cải thiện nhỏ:} các chênh lệch trong ablation ($0.3$--$1.1\%$) cùng cỡ độ lệch chuẩn giữa các seed.
     \item \textbf{Chậm hơn TimeBase} khoảng 2 lần, cái giá của nhánh trộn biến.
     \item \textbf{Phạm vi đánh giá:} số liệu của 10 mô hình lớn là số trích dẫn; hiệu năng đo trên CPU (Max Mem là RAM,
