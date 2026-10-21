@@ -19,6 +19,59 @@ PUBLISHED = ["TimeBase", "SparseTSF", "TimeMixer", "FITS", "iTransformer", "DLin
              "FEDformer", "Autoformer", "Informer"]
 
 
+def head_to_head(table, cols):
+    """DyTimeBase thắng/thua từng mô hình theo MSE: số ô (dataset × horizon) và AVG MSE từng dataset."""
+    out = ["", "## DyTimeBase đối đầu từng mô hình (MSE, 20 ô = 5 dataset × 4 horizon, làm tròn 3 chữ số)", "",
+           "| Mô hình | Thắng | Hòa | Thua | DyTimeBase thắng (AVG MSE) | DyTimeBase thua (AVG MSE) |",
+           "| --- | ---: | ---: | ---: | --- | --- |"]
+    for c in cols[1:]:
+        w = t = l = 0
+        for ds in DATASETS:
+            for h in HORIZONS:
+                a, b = round(table[(ds, h)]["DyTimeBase"][0], 3), round(table[(ds, h)][c][0], 3)
+                w, t, l = w + (a < b), t + (a == b), l + (a > b)
+        win = [ds for ds in DATASETS if table[(ds, "Avg")]["DyTimeBase"][0] < table[(ds, "Avg")][c][0]]
+        lose = [ds for ds in DATASETS if ds not in win]
+        out.append(f"| {c} | {w} | {t} | {l} | {', '.join(win) or '—'} | {', '.join(lose) or '—'} |")
+    return out
+
+
+ABLATION = {"DyTimeBase (đầy đủ)": "dytbase_off", "bỏ CrossV": "dytbase_nocross", "bỏ IntraV": "dytbase_nointra",
+            "bỏ cả nhánh trộn kênh (= TimeBase\\*)": "timebase_off", "đầy đủ, mix_lr 2e-3": "dytbase_mixlr2e-3"}
+
+
+def ablation():
+    out = ["", "## Ablation nhánh trộn kênh (AVG MSE trên 4 horizon, trung bình 3 seed, tự chạy)", "",
+           "| Biến thể | " + " | ".join(DATASETS) + " | Trung bình |", "| --- |" + " ---: |" * (len(DATASETS) + 1)]
+    all_runs = {ds: json.loads(Path(p).read_text(encoding="utf-8")) for ds, p in DATASETS.items()}
+    for label, v in ABLATION.items():
+        vals = []
+        for ds, runs in all_runs.items():
+            keys = [f"{v}_S{h}_seed{s}" for h in HORIZONS for s in SEEDS]
+            vals.append(statistics.mean(runs[k]["mse"] for k in keys) if all(k in runs for k in keys) else None)
+        cells = [f"{x:.4f}" if x is not None else "chưa chạy" for x in vals]
+        mean = f"{statistics.mean(vals):.4f}" if None not in vals else "—"
+        out.append(f"| {label} | " + " | ".join(cells) + f" | {mean} |")
+    return out
+
+
+def speed():
+    path = Path("results/bench_efficiency.json")
+    if not path.is_file():
+        return []
+    r = json.loads(path.read_text(encoding="utf-8"))
+    ref = r["DyTimeBase"]["infer_ms_t8"]
+    count = lambda v: f"{v / 1e9:.2f}G" if v >= 1e9 else f"{v / 1e6:.2f}M" if v >= 1e6 else f"{v / 1e3:.2f}K"  # noqa: E731
+    out = ["", "## Tốc độ trên cùng máy (Electricity, C = 321, L = S = 720; chi tiết: results/bench_efficiency.md)", "",
+           "| Mô hình | Params | MACs | Max Mem (MB) | Epoch Time (s) | Infer (ms) | Infer so với DyTimeBase |",
+           "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
+    for n, x in sorted(r.items(), key=lambda kv: kv[1]["infer_ms_t8"]):
+        mem = f"> {x['mem_over_gb'] * 1024:.0f}" if "mem_over_gb" in x else f"{x['max_mem_mb']:.0f}"
+        out.append(f"| {n} | {count(x['params'])} | {count(x['macs'])} | {mem} | {x['epoch_s']:.0f} | "
+                   f"{x['infer_ms_t8']:.2f} | {x['infer_ms_t8'] / ref:.2f}× |")
+    return out
+
+
 def main():
     pub = json.loads(Path("results/published_timebase_table10.json").read_text(encoding="utf-8"))["results"]
     cols = list(OURS) + PUBLISHED
@@ -70,9 +123,9 @@ def main():
             sa = f"{std[(ds, h, 'DyTimeBase')]:.4f}" if h != "Avg" else ""
             sb = f"{std[(ds, h, 'TimeBase*')]:.4f}" if h != "Avg" else ""
             lines.append(f"| {ds} | {h} | {a:.4f} | {b:.4f} | {100 * (a - b) / b:+.1f}% | {sa} | {sb} |")
+    lines += head_to_head(table, cols) + ablation() + speed()
     Path("results/compare_all_L720.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print("\n".join(lines[-32:]))
-    print(lines[-34])
+    print("\n".join(lines))
 
 
 if __name__ == "__main__":
