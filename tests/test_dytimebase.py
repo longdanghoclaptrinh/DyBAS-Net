@@ -49,3 +49,15 @@ def test_official_options_and_aux_loss():
     assert out.shape == (2, 21, 96) and model.aux_loss is not None and model.aux_loss.ndim == 0
     model.eval(); model(torch.randn(2, 21, 720))
     assert model.aux_loss is None
+
+
+def test_ablation_flags_keep_default_and_drop_blocks():
+    full = DyTimeBase(7, 96, 48, period=24, d_model=16)
+    assert isinstance(full.cross, torch.nn.Module) and not isinstance(full.cross, torch.nn.Identity)
+    nocross = DyTimeBase(7, 96, 48, period=24, d_model=16, use_cross=False)
+    nointra = DyTimeBase(7, 96, 48, period=24, d_model=16, use_intra=False)
+    assert isinstance(nocross.cross, torch.nn.Identity) and isinstance(nointra.intra, torch.nn.Identity)
+    for m in (nocross, nointra):
+        assert m(torch.randn(2, 7, 96)).shape == (2, 7, 48)
+    config = load_config("configs/ETTh1.yaml", {"model": "dytimebase", "seq_len": 96, "pred_len": 48, "use_cross": False})
+    assert config.model_kwargs(7)["use_cross"] is False
