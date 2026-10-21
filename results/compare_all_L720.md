@@ -61,3 +61,48 @@ Số lần đứng nhất (40 ô = 5 dataset × 4 horizon × MSE/MAE, tính cả
 | Weather | 336 | 0.2403 | 0.2382 | +0.9% | 0.0009 | 0.0001 |
 | Weather | 720 | 0.3141 | 0.3092 | +1.6% | 0.0063 | 0.0003 |
 | Weather | Avg | 0.2211 | 0.2195 | +0.8% |  |  |
+
+## DyTimeBase đối đầu từng mô hình (MSE, 20 ô = 5 dataset × 4 horizon, làm tròn 3 chữ số)
+
+| Mô hình | Thắng | Hòa | Thua | DyTimeBase thắng (AVG MSE) | DyTimeBase thua (AVG MSE) |
+| --- | ---: | ---: | ---: | --- | --- |
+| TimeBase* | 12 | 1 | 7 | ETTh1, ETTh2, ETTm1 | ETTm2, Weather |
+| TimeBase | 5 | 1 | 14 | ETTm1 | ETTh1, ETTh2, ETTm2, Weather |
+| SparseTSF | 12 | 1 | 7 | ETTh1, ETTm1, Weather | ETTh2, ETTm2 |
+| TimeMixer | 20 | 0 | 0 | ETTh1, ETTh2, ETTm1, ETTm2, Weather | — |
+| FITS | 11 | 0 | 9 | ETTh1, ETTm1, Weather | ETTh2, ETTm2 |
+| iTransformer | 20 | 0 | 0 | ETTh1, ETTh2, ETTm1, ETTm2, Weather | — |
+| DLinear | 17 | 0 | 3 | ETTh1, ETTh2, ETTm1, ETTm2, Weather | — |
+| PatchTST | 9 | 1 | 10 | ETTh1, ETTm1, Weather | ETTh2, ETTm2 |
+| TimesNet | 20 | 0 | 0 | ETTh1, ETTh2, ETTm1, ETTm2, Weather | — |
+| FEDformer | 20 | 0 | 0 | ETTh1, ETTh2, ETTm1, ETTm2, Weather | — |
+| Autoformer | 20 | 0 | 0 | ETTh1, ETTh2, ETTm1, ETTm2, Weather | — |
+| Informer | 20 | 0 | 0 | ETTh1, ETTh2, ETTm1, ETTm2, Weather | — |
+
+## Ablation nhánh trộn kênh (AVG MSE trên 4 horizon, trung bình 3 seed, tự chạy)
+
+| Biến thể | ETTh1 | ETTh2 | ETTm1 | ETTm2 | Weather | Trung bình |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| DyTimeBase (đầy đủ) | 0.4030 | 0.3580 | 0.3509 | 0.2634 | 0.2211 | 0.3193 |
+| bỏ CrossV | chưa chạy | chưa chạy | chưa chạy | chưa chạy | chưa chạy | — |
+| bỏ IntraV | chưa chạy | chưa chạy | chưa chạy | chưa chạy | chưa chạy | — |
+| bỏ cả nhánh trộn kênh (= TimeBase\*) | 0.4105 | 0.3627 | 0.3674 | 0.2539 | 0.2195 | 0.3228 |
+| đầy đủ, mix_lr 2e-3 | chưa chạy | chưa chạy | chưa chạy | chưa chạy | chưa chạy | — |
+
+## Tốc độ trên cùng máy (Electricity, C = 321, L = S = 720; chi tiết: results/bench_efficiency.md)
+
+| Mô hình | Params | MACs | Max Mem (MB) | Epoch Time (s) | Infer (ms) | Infer so với DyTimeBase |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| TimeBase | 0.40K | 2.77M | 117 | 20 | 0.34 | 0.52× |
+| DyTimeBase | 190.51K | 23.81M | 147 | 38 | 0.66 | 1.00× |
+| SparseTSF | 0.93K | 12.71M | 276 | 56 | 0.76 | 1.15× |
+| FITS | 133.64K | 42.73M | 210 | 78 | 1.70 | 2.59× |
+| DLinear | 1.04M | 332.81M | 150 | 55 | 1.93 | 2.94× |
+| DyTimeNet (cũ) | 785.14K | 211.80M | 285 | 131 | 2.14 | 3.25× |
+| iTransformer | 5.47M | 2.10G | 997 | 695 | 10.66 | 16.23× |
+| Informer | 12.45M | 7.91G | 2052 | 2926 | 66.16 | 100.66× |
+| Autoformer | 12.14M | 8.97G | 5057 | 5302 | 83.39 | 126.88× |
+| FEDformer | 18.44M | 8.99G | 3289 | 5367 | 135.93 | 206.81× |
+| TimeMixer | 5.58M | 29.97G | > 11264 | 16716 | 247.46 | 376.51× |
+| PatchTST | 8.69M | 16.08G | 10346 | 82400 | 285.51 | 434.40× |
+| TimesNet | 151.32M | 1081.75G | 4078 | 170983 | 3449.01 | 5247.64× |
