@@ -14,9 +14,27 @@ DATASETS = {"ETTh1": "results/suite_ETTh1_L720.json", "ETTh2": "results/suite_ET
             "Weather": "results/suite_Weather_L720_official.json"}
 HORIZONS = ("96", "192", "336", "720")
 SEEDS = (2021, 2022, 2023)
-OURS = {"DyTimeBase": "dytbase_off", "TimeBase*": "timebase_off"}
+# Tự chạy trong cùng pipeline, 3 seed. CycleNet/TQNet theo siêu tham số chính thức của từng mô hình
+# (scripts/run_suite.py, PERIODIC_TRAIN); không có số công bố ở L = 720 trong Table 10 của TimeBase.
+OURS = {"DyTimeBase": "dytbase_off", "TimeBase*": "timebase_off", "CycleNet/Linear": "cyclenet_off",
+        "CycleNet/MLP": "cyclenet_mlp_off", "TQNet": "tqnet_off"}
 PUBLISHED = ["TimeBase", "SparseTSF", "TimeMixer", "FITS", "iTransformer", "DLinear", "PatchTST", "TimesNet",
              "FEDformer", "Autoformer", "Informer"]
+# DyTimeBase dùng (p1, p2) chọn theo val loss từ lưới DropFusion (d_model 64, scripts/summarize_grid.py) trên các
+# dataset này; dataset khác giữ dytbase_off (bộ của Đồ án I). Kết quả lưới ở results/grid_<dataset>_L720*.json.
+TUNED = {"ETTh2": "dytbase_d64_p0.3_0.5", "ETTm2": "dytbase_d64_p0.4_0.6"}
+
+
+def load_runs(ds):
+    """Mọi lần chạy của một dataset: file suite cộng các file lưới DropFusion."""
+    runs = json.loads(Path(DATASETS[ds]).read_text(encoding="utf-8"))
+    for path in sorted(Path("results").glob(f"grid_{ds}_L720*.json")):
+        runs.update(json.loads(path.read_text(encoding="utf-8")))
+    return runs
+
+
+def variant(ds, label):
+    return TUNED.get(ds, OURS[label]) if label == "DyTimeBase" else OURS[label]
 
 
 def head_to_head(table, cols):
@@ -60,15 +78,16 @@ def speed():
     if not path.is_file():
         return []
     r = json.loads(path.read_text(encoding="utf-8"))
-    ref = r["DyTimeBase"]["infer_ms_t8"]
+    ref = r["DyTimeBase"]["infer_ms_t1"]
     count = lambda v: f"{v / 1e9:.2f}G" if v >= 1e9 else f"{v / 1e6:.2f}M" if v >= 1e6 else f"{v / 1e3:.2f}K"  # noqa: E731
     out = ["", "## Tốc độ trên cùng máy (Electricity, C = 321, L = S = 720; chi tiết: results/bench_efficiency.md)", "",
-           "| Mô hình | Params | MACs | Max Mem (MB) | Epoch Time (s) | Infer (ms) | Infer so với DyTimeBase |",
+           "Infer Time như Table 3 của TimeBase: dự báo một mẫu trên CPU, 1 luồng.", "",
+           "| Mô hình | Params | MACs | Max Mem (MB) | Epoch Time (s) | Infer Time (ms) | Infer so với DyTimeBase |",
            "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
-    for n, x in sorted(r.items(), key=lambda kv: kv[1]["infer_ms_t8"]):
+    for n, x in sorted(r.items(), key=lambda kv: kv[1]["infer_ms_t1"]):
         mem = f"> {x['mem_over_gb'] * 1024:.0f}" if "mem_over_gb" in x else f"{x['max_mem_mb']:.0f}"
         out.append(f"| {n} | {count(x['params'])} | {count(x['macs'])} | {mem} | {x['epoch_s']:.0f} | "
-                   f"{x['infer_ms_t8']:.2f} | {x['infer_ms_t8'] / ref:.2f}× |")
+                   f"{x['infer_ms_t1']:.2f} | {x['infer_ms_t1'] / ref:.2f}× |")
     return out
 
 
@@ -76,12 +95,12 @@ def main():
     pub = json.loads(Path("results/published_timebase_table10.json").read_text(encoding="utf-8"))["results"]
     cols = list(OURS) + PUBLISHED
     table, std = {}, {}
-    for ds, path in DATASETS.items():
-        runs = json.loads(Path(path).read_text(encoding="utf-8"))
+    for ds in DATASETS:
+        runs = load_runs(ds)
         for h in HORIZONS:
             row = {}
-            for label, v in OURS.items():
-                rs = [runs[f"{v}_S{h}_seed{s}"] for s in SEEDS]
+            for label in OURS:
+                rs = [runs[f"{variant(ds, label)}_S{h}_seed{s}"] for s in SEEDS]
                 row[label] = (statistics.mean(r["mse"] for r in rs), statistics.mean(r["mae"] for r in rs))
                 std[(ds, h, label)] = statistics.stdev(r["mse"] for r in rs)
             for m in PUBLISHED:
@@ -98,13 +117,14 @@ def main():
 
     lines = ["# Độ chính xác dài hạn, L = 720 cho mọi mô hình", "",
              "DyTimeBase và TimeBase\\* tự chạy trong cùng pipeline (siêu tham số chính thức của TimeBase, trung bình 3 seed "
-             "2021–2023, CPU). Các cột còn lại là số công bố trong Table 10 của TimeBase (Huang et al., ICML 2025), cũng "
+             "2021–2023, CPU). CycleNet/Linear, CycleNet/MLP, TQNet cũng tự chạy, 3 seed, với siêu tham số chính thức "
+             "của từng mô hình (CycleNet: script Input-720; TQNet: script L = 96, chỉ đổi seq_len). Các cột còn lại là số công bố trong Table 10 của TimeBase (Huang et al., ICML 2025), cũng "
              "với L = 720 (cột TimeBase là số họ công bố, chạy 1 lần). **Đậm** = tốt nhất, <u>gạch chân</u> = thứ hai "
              "(làm tròn 3 chữ số).", "",
              "Siêu tham số của DyTimeBase: xương sống (P, R, lr, batch, λ_orth, lịch type3, 30 epoch, patience 5) theo "
-             "script chính thức của TimeBase; nhánh trộn kênh giữ nguyên bộ đã tối ưu của DyTimeNet trong Đồ án I, "
-             "Bảng 3.1 (d_model, p1, p2: ETTh1 64/0.1/0.1, ETTh2 64/0.6/0.6, ETTm1 64/0.1/0.2, ETTm2 32/0.1/0.1, "
-             "Weather 64/0.1/0.1), lr nhánh trộn kênh 5e-4. Không tinh chỉnh thêm cho DyTimeBase.", "",
+             "script chính thức của TimeBase; nhánh trộn kênh (d_model, p1, p2): ETTh1 64/0.1/0.1, ETTm1 64/0.1/0.2, "
+             "Weather 64/0.1/0.1 giữ bộ của DyTimeNet trong Đồ án I, Bảng 3.1; ETTh2 64/0.3/0.5 và ETTm2 64/0.4/0.6 "
+             "chọn theo val loss từ lưới p1, p2 ∈ {0.1, …, 0.6} (scripts/summarize_grid.py). lr nhánh trộn kênh 5e-4.", "",
              "| Dataset | S | " + " | ".join(f"{c} MSE | {c} MAE" for c in cols) + " |",
              "| --- | --- |" + " ---: |" * (2 * len(cols))]
     wins = {c: 0 for c in cols}
