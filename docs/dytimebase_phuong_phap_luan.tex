@@ -493,18 +493,23 @@ Các thiết lập chung cho mọi bộ dữ liệu:
 
 \subsection{Các mô hình so sánh}
 
-DyTimeBase được so sánh với 11 mô hình, chia làm hai nhóm:
+DyTimeBase được so sánh với 14 mô hình, chia làm ba nhóm:
 \begin{itemize}
   \item \textbf{TimeBase$^{*}$}: TimeBase~\cite{timebase} cài đặt lại theo mã nguồn chính thức và chạy trong \emph{cùng quy
         trình} với DyTimeBase (cùng dữ liệu, cùng siêu tham số xương sống, cùng 3 seed). Với cùng trọng số, đầu ra của bản
         cài đặt lại lệch so với mã nguồn chính thức không quá $3\cdot10^{-7}$. Đây là phép so sánh công bằng nhất, vì hai mô
         hình chỉ khác nhau đúng ở nhánh trộn kênh.
+  \item \textbf{CycleNet và TQNet}: CycleNet/Linear, CycleNet/MLP~\cite{cyclenet} (học chu kỳ tuần hoàn, độc lập kênh) và
+        TQNet~\cite{tqnet} (truy vấn theo chu kỳ, có học quan hệ giữa các kênh) là hai mô hình nhẹ gần đây có code công
+        khai. Cả hai được cài đặt lại theo mã nguồn chính thức (với cùng trọng số, đầu ra trùng khớp hoàn toàn) và chạy
+        trong cùng quy trình, 3 seed, với siêu tham số chính thức của từng mô hình: CycleNet theo script $L=720$ của tác
+        giả; TQNet chỉ có script $L=96$ nên giữ nguyên siêu tham số và chỉ đổi độ dài đầu vào thành 720.
   \item \textbf{Số liệu công bố}: TimeBase$^{\dagger}$, SparseTSF~\cite{sparsetsf}, TimeMixer~\cite{timemixer},
         FITS~\cite{fits}, iTransformer~\cite{itransformer}, DLinear~\cite{dlinear}, PatchTST~\cite{patchtst},
         TimesNet~\cite{timesnet}, FEDformer~\cite{fedformer}, Autoformer~\cite{autoformer} và Informer~\cite{informer}. Kết
         quả lấy từ Table 10 của~\cite{timebase}, nơi mọi mô hình được chạy với cùng $L=720$ và cùng cách chia dữ liệu.
         Các mô hình Transformer cỡ lớn không được huấn luyện lại vì chi phí trên CPU quá cao (ví dụ, một epoch của
-        PatchTST ở cấu hình Electricity mất khoảng 23 giờ, Bảng~\ref{tab:efficiency}).
+        PatchTST ở cấu hình Electricity mất khoảng 21 giờ, Bảng~\ref{tab:efficiency}).
 \end{itemize}
 
 \subsection{Môi trường thực nghiệm}
@@ -536,7 +541,8 @@ Theo~\cite{timebase}, hiệu năng được đo bằng năm chỉ số trên c�
         tiến trình, không phải bộ nhớ GPU như trong~\cite{timebase}.
   \item \textbf{Epoch Time}: thời gian một epoch huấn luyện, tính bằng thời gian một bước (đo thực tế) nhân với số bước của
         một epoch.
-  \item \textbf{Infer Time}: thời gian dự báo một mẫu trên CPU.
+  \item \textbf{Infer Time}: thời gian dự báo một mẫu trên CPU, dùng 1 luồng. Các mô hình nhẹ được đo 5 lần xen kẽ và lấy
+        trung vị.
 \end{itemize}
 Mỗi mô hình được đo trong một tiến trình riêng, với dữ liệu ngẫu nhiên cùng kích thước (tốc độ không phụ thuộc giá
 trị dữ liệu). Các mô hình so sánh được dựng từ mã nguồn chính thức: Time-Series-Library~\cite{tslib} với cấu hình script
@@ -547,25 +553,27 @@ chính thức, PatchTST theo kho mã của~\cite{patchtst}, FITS theo kho mã c�
 
 \subsection{So sánh độ chính xác}
 
-Bảng~\ref{tab:acc-mse} và Bảng~\ref{tab:acc-mae} trình bày MSE và MAE của 13 mô hình trên 5 bộ dữ liệu.
+Bảng~\ref{tab:acc-mse} và Bảng~\ref{tab:acc-mae} trình bày MSE và MAE của 16 mô hình trên 5 bộ dữ liệu.
 
 \input{tables/acc_mse.tex}
 \input{tables/acc_mae.tex}
 
 Xét MSE trung bình trên 4 độ dài dự báo:
 \begin{itemize}
-  \item Trên \textbf{ETTm1}, DyTimeBase đạt MSE thấp nhất trong cả 13 mô hình (0.351), tốt hơn PatchTST (0.355) và số
-        công bố của TimeBase (0.356).
-  \item Trên \textbf{ETTh1} và \textbf{Weather}, DyTimeBase đứng thứ hai (0.403 và 0.221), chỉ sau số công bố của
-        TimeBase (0.396 và 0.219), và tốt hơn PatchTST, SparseTSF, FITS cùng mọi mô hình Transformer.
+  \item Trên \textbf{ETTm1}, DyTimeBase đạt MSE thấp nhất trong cả 16 mô hình (0.351), tốt hơn PatchTST (0.355), số
+        công bố của TimeBase (0.356) và CycleNet/Linear (0.358).
+  \item Trên \textbf{ETTh1} và \textbf{Weather}, DyTimeBase đứng thứ hai (0.403 và 0.221), chỉ sau TimeBase (0.396 và
+        0.219), và tốt hơn PatchTST, SparseTSF, FITS, CycleNet, TQNet cùng mọi mô hình Transformer.
   \item Trên \textbf{ETTh2} và \textbf{ETTm2}, DyTimeBase (0.358 và 0.263) kém nhóm mô hình tuyến tính mạnh (FITS,
-        SparseTSF, TimeBase) và PatchTST.
+        SparseTSF, TimeBase, CycleNet/Linear) và PatchTST. CycleNet/Linear đạt MSE thấp nhất trên ETTm2 (0.249).
 \end{itemize}
 
 Bảng~\ref{tab:h2h} đếm số lần DyTimeBase thắng từng mô hình trên 20 cặp (bộ dữ liệu, độ dài dự báo). DyTimeBase thắng
-toàn bộ 20/20 trước TimeMixer, iTransformer, TimesNet, FEDformer, Autoformer và Informer, và thắng DLinear 17/20. Với
-nhóm mô hình mạnh nhất (SparseTSF, FITS, PatchTST), DyTimeBase ở mức ngang ngửa: thắng trên ETTh1, ETTm1, Weather và
-thua trên ETTh2, ETTm2. DyTimeBase vẫn kém số liệu công bố của TimeBase (thắng 5/20).
+toàn bộ 20/20 trước TimeMixer, iTransformer, TimesNet, FEDformer, Autoformer và Informer, và thắng DLinear 17/20. So với
+TQNet, mô hình nhẹ duy nhất trong bảng cũng học quan hệ giữa các kênh, DyTimeBase thắng 16/20 và có MSE trung bình thấp
+hơn trên cả 5 bộ dữ liệu; tỉ số với CycleNet/MLP cũng là 16/20. Với nhóm mô hình mạnh nhất (SparseTSF, FITS, PatchTST,
+CycleNet/Linear), DyTimeBase ở mức ngang ngửa: thắng trên ETTh1, ETTm1, Weather và thua trên ETTh2, ETTm2. DyTimeBase vẫn
+kém số liệu công bố của TimeBase (thắng 5/20).
 
 \input{tables/h2h.tex}
 
@@ -589,13 +597,15 @@ phi tuyến dễ quá khớp trên chuỗi tương đối trơn, nơi một mô 
 
 Bảng~\ref{tab:efficiency} cho thấy:
 \begin{itemize}
-  \item DyTimeBase nhanh thứ hai trong 13 mô hình khi suy luận (0.66 ms một mẫu), chỉ sau TimeBase (0.34 ms), và nhanh
-        hơn SparseTSF, FITS, DLinear. So với các mô hình Transformer, DyTimeBase nhanh hơn iTransformer khoảng 16 lần,
-        TimeMixer khoảng 377 lần và PatchTST khoảng 434 lần.
-  \item Chi phí huấn luyện cũng thấp: 38 giây một epoch và 147 MB bộ nhớ, trong khi PatchTST cần hơn 10 GB và khoảng
-        23 giờ một epoch trên cùng thiết bị.
+  \item DyTimeBase nhanh thứ hai trong 16 mô hình khi suy luận (1.63 ms một mẫu), chỉ sau TimeBase (1.01 ms), và nhanh
+        hơn SparseTSF (2.39 ms), FITS, DLinear.
+  \item So với các mô hình nhẹ có học chu kỳ, DyTimeBase nhanh hơn CycleNet/Linear 4.1 lần, CycleNet/MLP 4.9 lần và TQNet
+        15 lần; TQNet cần 1.22G MACs, gấp khoảng 51 lần DyTimeBase. So với các mô hình Transformer, DyTimeBase nhanh hơn
+        iTransformer khoảng 29 lần, TimeMixer khoảng 500 lần và PatchTST khoảng 570 lần.
+  \item Chi phí huấn luyện cũng thấp: 40 giây một epoch và 146 MB bộ nhớ, trong khi PatchTST cần gần 11 GB và khoảng
+        21 giờ một epoch trên cùng thiết bị.
   \item So với DyTimeNet của Đồ án I ở cùng cấu hình, DyTimeBase có ít hơn khoảng 4.1 lần tham số (190.5K so với 785.1K),
-        ít hơn khoảng 8.9 lần MACs (23.8M so với 211.8M) và suy luận nhanh hơn khoảng 3.2 lần.
+        ít hơn khoảng 8.9 lần MACs (23.8M so với 211.8M) và suy luận nhanh hơn khoảng 6.5 lần.
 \end{itemize}
 Nguyên nhân là mọi phép biến đổi theo trục thời gian chạy trên các kích thước $N$, $R$, $P$ (vài chục) thay vì $L$, $S$
 (hàng trăm), như đã phân tích ở mục~\ref{sec:complexity}.
@@ -624,7 +634,8 @@ khác, chỉ bỏ đi một khối.
   \item Các chênh lệch trong nghiên cứu loại bỏ (0.3--1.1\%) cùng cỡ với độ lệch chuẩn giữa các seed, nên chỉ cho thấy xu
         hướng, chưa đủ để khẳng định chắc chắn đóng góp của từng khối.
   \item DyTimeBase chưa vượt được số liệu công bố của TimeBase, và kém các mô hình tuyến tính mạnh trên ETTh2, ETTm2.
-  \item Số liệu của các mô hình so sánh (trừ TimeBase$^{*}$) được trích dẫn chứ không chạy lại; số tham số của Informer,
+  \item Số liệu độ chính xác của các mô hình so sánh (trừ TimeBase$^{*}$, CycleNet và TQNet) được trích dẫn chứ không chạy
+        lại. TQNet dùng siêu tham số của script $L=96$ nên có thể chưa tối ưu ở $L=720$. Số tham số của Informer,
         Autoformer, FEDformer ở Bảng~\ref{tab:efficiency} (cấu hình script của Time-Series-Library) khác với số
         trong~\cite{timebase}.
   \item Max Mem đo bằng RAM của CPU; Epoch Time của các mô hình lớn là ước tính từ thời gian một bước huấn luyện. MACs
@@ -633,10 +644,11 @@ khác, chỉ bỏ đi một khối.
 
 \section*{Tóm tắt chương}
 
-DyTimeBase dự báo một mẫu trong 0.66 ms trên CPU, nhanh thứ hai trong 13 mô hình và nhanh hơn các mô hình Transformer
-từ 16 đến hàng nghìn lần. Về độ chính xác, DyTimeBase vượt toàn bộ các mô hình Transformer và DLinear, đạt kết quả tốt
-nhất trên ETTm1, đứng thứ hai trên ETTh1 và Weather, và ngang ngửa nhóm mô hình tuyến tính mạnh (SparseTSF, FITS) cùng
-PatchTST. So với TimeBase trong cùng quy trình, nhánh trộn kênh cải thiện kết quả trên 3/5 bộ dữ liệu.
+DyTimeBase dự báo một mẫu trong 1.63 ms trên CPU, nhanh thứ hai trong 16 mô hình, nhanh hơn CycleNet và TQNet từ 4 đến
+15 lần và nhanh hơn các mô hình Transformer từ 29 đến hàng nghìn lần. Về độ
+chính xác, DyTimeBase vượt toàn bộ các mô hình Transformer và DLinear, tốt hơn TQNet trên cả 5 bộ dữ liệu, đạt kết quả
+tốt nhất trên ETTm1, đứng thứ hai trên ETTh1 và Weather, và ngang ngửa nhóm mô hình tuyến tính mạnh (SparseTSF, FITS,
+CycleNet/Linear) cùng PatchTST. So với TimeBase trong cùng quy trình, nhánh trộn kênh cải thiện kết quả trên 3/5 bộ dữ liệu.
 
 %=====================================================================
 \begin{thebibliography}{99}
@@ -646,6 +658,10 @@ PatchTST. So với TimeBase trong cùng quy trình, nhánh trộn kênh cải th
   strategy for multivariate time series forecasting,'' \emph{Neurocomputing}, vol. 676, p. 132964, 2026.
 \bibitem{tslib} Y. Wang, H. Wu, J. Dong, Y. Liu, M. Long, J. Wang, ``Deep time series models: A comprehensive survey and
   benchmark,'' \emph{arXiv:2407.13278}, 2024.
+\bibitem{cyclenet} S. Lin, W. Lin, X. Hu, W. Wu, R. Mo, H. Zhong, ``CycleNet: Enhancing time series forecasting through
+  modeling periodic patterns,'' in \emph{Proc. NeurIPS}, 2024.
+\bibitem{tqnet} S. Lin, H. Chen, H. Wu, C. Qiu, W. Lin, ``Temporal query network for efficient multivariate time series
+  forecasting,'' in \emph{Proc. ICML}, PMLR 267, 2025.
 \bibitem{sparsetsf} S. Lin, W. Lin, W. Wu, H. Chen, J. Yang, ``SparseTSF: Modeling long-term time series forecasting with
   1k parameters,'' in \emph{Proc. ICML}, 2024.
 \bibitem{timemixer} S. Wang, H. Wu, X. Shi, T. Hu, H. Luo, L. Ma, et al., ``TimeMixer: Decomposable multiscale mixing for
