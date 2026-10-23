@@ -111,8 +111,8 @@ class TimeSeriesDataset(Dataset):
 class DeviceWindowLoader:
     """Thay DataLoader khi chạy GPU: giữ cả split trên thiết bị và cắt một lô cửa sổ bằng một phép chỉ mục.
 
-    Cùng cửa sổ, cùng thứ tự cột và pha chu kỳ như TimeSeriesDataset; train xáo trộn bằng torch.randperm (RNG đã cố
-    định seed) và bỏ lô cuối, val/test giữ thứ tự và dùng mọi cửa sổ. Tránh nút thắt CPU của việc cắt từng mẫu.
+    Cùng cửa sổ, cùng thứ tự cột và pha chu kỳ như TimeSeriesDataset; train xáo trộn cùng thứ tự với DataLoader ở
+    cùng seed và bỏ lô cuối, val/test giữ thứ tự và dùng mọi cửa sổ. Tránh việc cắt từng mẫu trên CPU rồi chép lên GPU.
     """
 
     def __init__(self, dataset, batch_size, shuffle, device):
@@ -127,7 +127,15 @@ class DeviceWindowLoader:
 
     def __iter__(self):
         n, L = len(self.dataset), self.dataset.seq_len
-        order = torch.randperm(n) if self.shuffle else torch.arange(n)
+        # Rút RNG toàn cục đúng như DataLoader + RandomSampler (base seed, rồi seed của hoán vị) để cùng seed cho cùng
+        # thứ tự lô với cách chạy cũ, kể cả khi xen kẽ với các lượt val.
+        torch.empty((), dtype=torch.int64).random_()
+        if self.shuffle:
+            generator = torch.Generator()
+            generator.manual_seed(int(torch.empty((), dtype=torch.int64).random_().item()))
+            order = torch.randperm(n, generator=generator)
+        else:
+            order = torch.arange(n)
         for k in range(len(self)):
             idx = order[k * self.batch_size:(k + 1) * self.batch_size].to(self.device)
             win = self.data[idx[:, None] + self.offsets]                          # [B, L + S, C]
