@@ -56,7 +56,7 @@ def train(config):
     train_loader, val_loader, test_loader, num_vars = get_dataloaders(
         config.data_path, config.seq_len, config.pred_len, config.batch_size,
         config.num_workers, config.target_cols, config.scale, dataset_name=config.dataset,
-        cycle_len=config.cycle_len)
+        cycle_len=config.cycle_len, device=device)
     model = build_model(config.model, **config.model_kwargs(num_vars)).to(device)
     print(f"{config.model} | {config.dataset} | L={config.seq_len} S={config.pred_len} | "
           f"device={device} | parameters={model.count_parameters():,}")

@@ -108,9 +108,42 @@ class TimeSeriesDataset(Dataset):
         }
 
 
+class DeviceWindowLoader:
+    """Thay DataLoader khi chạy GPU: giữ cả split trên thiết bị và cắt một lô cửa sổ bằng một phép chỉ mục.
+
+    Cùng cửa sổ, cùng thứ tự cột và pha chu kỳ như TimeSeriesDataset; train xáo trộn bằng torch.randperm (RNG đã cố
+    định seed) và bỏ lô cuối, val/test giữ thứ tự và dùng mọi cửa sổ. Tránh nút thắt CPU của việc cắt từng mẫu.
+    """
+
+    def __init__(self, dataset, batch_size, shuffle, device):
+        self.dataset, self.batch_size, self.shuffle, self.drop_last = dataset, batch_size, shuffle, shuffle
+        self.data = dataset.data.to(device)                                       # [T, C]
+        self.offsets = torch.arange(dataset.seq_len + dataset.pred_len, device=device)
+        self.device = device
+
+    def __len__(self):
+        n = len(self.dataset)
+        return n // self.batch_size if self.drop_last else -(-n // self.batch_size)
+
+    def __iter__(self):
+        n, L = len(self.dataset), self.dataset.seq_len
+        order = torch.randperm(n) if self.shuffle else torch.arange(n)
+        for k in range(len(self)):
+            idx = order[k * self.batch_size:(k + 1) * self.batch_size].to(self.device)
+            win = self.data[idx[:, None] + self.offsets]                          # [B, L + S, C]
+            x, y = win[:, :L].transpose(1, 2).contiguous(), win[:, L:].transpose(1, 2).contiguous()
+            if self.dataset.cycle_len:
+                yield x, y, (self.dataset.start + idx) % self.dataset.cycle_len
+            else:
+                yield x, y
+
+
 def get_dataloaders(data_path, seq_len, pred_len, batch_size=32, num_workers=0,
-                    target_cols=None, scale=True, verbose=True, dataset_name=None, cycle_len=0):
-    """Preserve shuffled/drop-last training and complete ordered validation/test."""
+                    target_cols=None, scale=True, verbose=True, dataset_name=None, cycle_len=0, device=None):
+    """Preserve shuffled/drop-last training and complete ordered validation/test.
+
+    device là GPU: dùng DeviceWindowLoader (cùng cửa sổ và cách chia lô, nhanh hơn nhiều); CPU giữ DataLoader.
+    """
     if batch_size <= 0 or num_workers < 0:
         raise ValueError("batch_size must be positive and num_workers non-negative")
     kwargs = dict(data_path=data_path, seq_len=seq_len, pred_len=pred_len,
@@ -122,6 +155,8 @@ def get_dataloaders(data_path, seq_len, pred_len, batch_size=32, num_workers=0,
         raise ValueError("Training split has fewer windows than batch_size; reduce --batch_size")
 
     def loader(ds, shuffle):
+        if device is not None and torch.device(device).type == "cuda":
+            return DeviceWindowLoader(ds, batch_size, shuffle, device)
         return DataLoader(ds, batch_size=batch_size, shuffle=shuffle,
                           num_workers=num_workers, drop_last=shuffle)
 
