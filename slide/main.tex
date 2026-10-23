@@ -194,7 +194,7 @@ hướng tiếp cận:
     \item \textbf{Hiệu chỉnh có kiểm soát:} nhánh trộn biến chỉ cộng một lượng hiệu chỉnh vào các thành phần cơ sở, được
           khởi tạo bằng 0.
 
-    \item \textbf{Đánh giá toàn diện:} so sánh độ chính xác với 11 mô hình trên 5 bộ dữ liệu, và đo chi phí tính toán của
+    \item \textbf{Đánh giá toàn diện:} so sánh độ chính xác với 14 mô hình trên 5 bộ dữ liệu, và đo chi phí tính toán của
           các mô hình trên \emph{cùng một thiết bị}.
 \end{itemize}
 \end{frame}
@@ -625,14 +625,21 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 
 \begin{frame}{DyBAS-Net \& Baselines}
 \scriptsize
-\input{tables/h2h.tex}
+Số ô (bộ dữ liệu $\times$ độ dài dự báo, 20 ô) DyBAS-Net có MSE thấp hơn / bằng / cao hơn từng mô hình.
 
 \vspace{0.1cm}
-\small
+\input{tables/h2h.tex}
+\end{frame}
+
+\begin{frame}{Nhận xét độ chính xác}
 \begin{itemize}
-    \item \textbf{Hơn hẳn:} TimeMixer, iTransformer, TimesNet, FEDformer, Autoformer, Informer (20/20) và DLinear (17/20).
-    \item \textbf{Ngang ngửa:} SparseTSF, FITS, PatchTST (thắng trên ETTh1, ETTm1, Weather; thua trên ETTh2, ETTm2).
-    \item \textbf{So với TimeBase (cùng quy trình):} thắng 12/20; tốt hơn trên ETTh1, ETTh2, ETTm1, kém hơn trên
+    \item \textbf{Hơn hẳn:} iTransformer, TimesNet, FEDformer, Autoformer, Informer (20/20), TimeMixer (19/20) và DLinear
+          (17/20).
+    \item \textbf{Hơn TQNet}\refnote{Lin2025TQNet} (nhẹ, có học quan hệ liên biến): thắng 16/20, tốt hơn trên 4/5 bộ dữ
+          liệu (trừ ETTm2).
+    \item \textbf{Ngang ngửa:} SparseTSF, FITS, PatchTST, CycleNet-L\refnote{Lin2024CycleNet} (thắng trên ETTh1, ETTm1,
+          Weather; thua trên ETTh2, ETTm2).
+    \item \textbf{So với TimeBase (cùng quy trình):} thắng 12/20, hòa 2; tốt hơn trên ETTh1, ETTh2, ETTm1, kém hơn trên
           ETTm2, Weather.
 \end{itemize}
 \end{frame}
@@ -641,7 +648,7 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 
 \begin{frame}{Hiệu năng tính toán trên cùng một thiết bị}
 \scriptsize
-Electricity ($C=321$), $L=S=720$. Epoch Time: thời gian một bước huấn luyện (lô 12) $\times$ 1\,414 bước. Infer Time: dự báo 1 mẫu, 8 luồng. Sắp xếp theo Infer Time.
+Electricity ($C=321$), $L=S=720$. Epoch Time: thời gian một bước huấn luyện (lô 12) $\times$ 1\,414 bước. Infer Time: dự báo 1 mẫu trên CPU. Sắp xếp theo Infer Time.
 
 \vspace{0.1cm}
 \input{tables/efficiency.tex}
@@ -650,11 +657,12 @@ Electricity ($C=321$), $L=S=720$. Epoch Time: thời gian một bước huấn l
 
 \begin{frame}{Nhận xét hiệu năng}
 \begin{itemize}
-    \item DyBAS-Net \textbf{nhanh thứ hai trong 13 mô hình} khi suy luận (0.66 ms một mẫu), chỉ sau TimeBase (0.34 ms).
-    \item Nhanh hơn SparseTSF (0.76 ms), FITS (1.70 ms), DLinear (1.93 ms).
-    \item So với các mô hình sâu: nhanh hơn iTransformer $\sim$16 lần, TimeMixer $\sim$377 lần, PatchTST $\sim$434 lần,
-          TimesNet hơn 5\,000 lần.
-    \item Huấn luyện nhẹ: 38 s một epoch.
+    \item DyBAS-Net \textbf{nhanh thứ hai trong 16 mô hình} khi suy luận (1.63 ms một mẫu), chỉ sau TimeBase (1.01 ms).
+    \item Nhanh hơn SparseTSF (2.39 ms), CycleNet-L (6.71 ms), FITS (7.48 ms), DLinear (7.88 ms), CycleNet-M (7.93 ms)
+          và TQNet (25.04 ms, gấp 15 lần).
+    \item So với các mô hình sâu: nhanh hơn iTransformer $\sim$29 lần, TimeMixer $\sim$500 lần, PatchTST $\sim$570 lần,
+          TimesNet hơn 8\,000 lần.
+    \item Huấn luyện nhẹ: 40 s một epoch.
 \end{itemize}
 
 \begin{block}{Nguyên nhân}
@@ -669,8 +677,8 @@ Biến đổi theo trục thời gian chạy trên $N$, $R$, $P$ (vài chục) t
 \begin{itemize}
     \item \textbf{Đề xuất DyBAS-Net:} kết hợp dự báo theo đoạn dựa trên thành phần cơ sở (TimeBase) với học phụ thuộc chéo
           có điều chuẩn thưa (CrossVBlock, DropFusion, IntraVBlock của DyTimeNet), đặt trong \emph{không gian cơ sở}.
-    \item \textbf{Rất nhẹ:} 23.8M MACs, 0.66 ms một mẫu trên CPU ở cấu hình Electricity; nhanh thứ hai trong 13 mô hình,
-          nhanh hơn các mô hình iTransformer, TimeMixer, PatchTST, TimesNet từ 16 đến hơn 5\,000 lần.
+    \item \textbf{Rất nhẹ:} 23.8M MACs, 1.63 ms một mẫu trên CPU ở cấu hình Electricity; nhanh thứ hai trong 16 mô hình,
+          nhanh hơn TQNet 15 lần và nhanh hơn iTransformer, TimeMixer, PatchTST, TimesNet từ 29 đến hơn 8\,000 lần.
     \item \textbf{Nhánh trộn biến có ích:} so với TimeBase cùng quy trình, giảm MSE trung bình trên 3/5 bộ dữ liệu (tới
           $4.5\%$ trên ETTm1).
 \end{itemize}

@@ -3,13 +3,16 @@
 \toprule
 Đối thủ & Thắng & Hòa & Thua & DyBAS-Net tốt hơn (MSE TB) & DyBAS-Net kém hơn (MSE TB)\\
 \midrule
-TimeBase & 12 & 1 & 7 & ETTh1, ETTh2, ETTm1 & ETTm2, Weather\\
-SparseTSF & 12 & 1 & 7 & ETTh1, ETTm1, Weather & ETTh2, ETTm2\\
-TimeMixer & 20 & 0 & 0 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & --\\
-FITS & 11 & 0 & 9 & ETTh1, ETTm1, Weather & ETTh2, ETTm2\\
+TimeBase & 12 & 2 & 6 & ETTh1, ETTh2, ETTm1 & ETTm2, Weather\\
+CycleNet-L & 12 & 0 & 8 & ETTh1, ETTm1, Weather & ETTh2, ETTm2\\
+CycleNet-M & 17 & 0 & 3 & ETTh1, ETTh2, ETTm1, Weather & ETTm2\\
+TQNet & 16 & 0 & 4 & ETTh1, ETTh2, ETTm1, Weather & ETTm2\\
+SparseTSF & 13 & 0 & 7 & ETTh1, ETTm1, Weather & ETTh2, ETTm2\\
+TimeMixer & 19 & 0 & 1 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & --\\
+FITS & 11 & 1 & 8 & ETTh1, ETTm1, Weather & ETTh2, ETTm2\\
 iTransformer & 20 & 0 & 0 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & --\\
 DLinear & 17 & 0 & 3 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & --\\
-PatchTST & 9 & 1 & 10 & ETTh1, ETTm1, Weather & ETTh2, ETTm2\\
+PatchTST & 9 & 2 & 9 & ETTh1, ETTm1, Weather & ETTh2, ETTm2\\
 TimesNet & 20 & 0 & 0 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & --\\
 FEDformer & 20 & 0 & 0 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & --\\
 Autoformer & 20 & 0 & 0 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & --\\
