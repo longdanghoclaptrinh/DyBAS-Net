@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+DATASET_NAMES = ("ETTh1", "ETTh2", "ETTm1", "ETTm2", "Weather", "Electricity", "Traffic")
 MODEL_NAMES = ("dytimenet", "rlinear", "dlinear", "timebase", "sparsetsf", "dytimebase",
                "cyclenet", "cyclenet_mlp", "tqnet")
 CYCLE_MODELS = ("cyclenet", "cyclenet_mlp", "tqnet")   # cần pha chu kỳ (cycle_len > 0)
@@ -58,8 +59,8 @@ class ExperimentConfig:
 
     def validate(self):
         """Reject invalid settings before reading data or creating a checkpoint."""
-        if self.dataset not in ("ETTh1", "ETTh2", "ETTm1", "ETTm2", "Weather"):
-            raise ValueError("dataset must be ETTh1, ETTh2, ETTm1, ETTm2, or Weather")
+        if self.dataset not in DATASET_NAMES:
+            raise ValueError(f"dataset must be one of: {', '.join(DATASET_NAMES)}")
         for name in ("seq_len", "pred_len", "d_model", "num_layers", "batch_size",
                      "epochs", "patience", "decomp_kernel", "period", "basis_num"):
             value = getattr(self, name)

@@ -1,0 +1,8 @@
+# Shared defaults: src/dytimenet/config.py; explicit CLI arguments override these values.
+# Electricity (321 biến, 1 giờ), chia 7:1:2 như Weather. Nhánh trộn kênh của DyTimeBase: D = 64, p1 = p2 = 0.1.
+dataset: Electricity
+data_path: data/electricity.csv
+d_model: 64
+batch_size: 64
+p1: 0.1
+p2: 0.1
