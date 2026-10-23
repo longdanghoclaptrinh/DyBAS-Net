@@ -31,7 +31,10 @@ import types
 C, L, S, MEM_BATCH = 321, 720, 720, 12
 TRAIN_WINDOWS = int(26304 * 0.7) - L - S + 1          # Electricity: 26 304 dòng, train 70%
 MODELS = ["Informer", "Autoformer", "FEDformer", "TimesNet", "PatchTST", "DLinear", "FITS", "iTransformer",
-          "TimeMixer", "SparseTSF", "TimeBase", "DyTimeNet (cũ)", "DyTimeBase"]
+          "TimeMixer", "SparseTSF", "TimeBase", "DyTimeNet (cũ)", "DyTimeBase", "CycleNet/Linear", "CycleNet/MLP",
+          "TQNet"]
+# CycleNet/TQNet: cấu hình script electricity.sh chính thức (chu kỳ 168 = một tuần, d_model 512).
+CYCLE_MODELS = {"CycleNet/Linear": "cyclenet", "CycleNet/MLP": "cyclenet_mlp", "TQNet": "tqnet"}
 TSLIB = {   # script ECL chính thức của TSLib (PatchTST theo repo PatchTST)
     "Informer": dict(label_len=48, e_layers=2, d_layers=1, factor=3),
     "Autoformer": dict(label_len=48, e_layers=2, d_layers=1, factor=3),
@@ -62,6 +65,16 @@ def build(name, tslib, fits):
         return build_model("dlinear", **base)
     if name == "DyTimeNet (cũ)":
         return build_model("dytimenet", **base, d_model=64, cross_residual="norm")
+    if name in CYCLE_MODELS:
+        model = build_model(CYCLE_MODELS[name], **base, cycle_len=168, d_model=512, dropout=0.5)
+
+        class CycleWrap(nn.Module):
+            def __init__(self, m):
+                super().__init__(); self.m = m
+
+            def forward(self, x):                                   # pha chu kỳ 0 cho mọi mẫu
+                return self.m(x, torch.zeros(x.shape[0], dtype=torch.long))
+        return CycleWrap(model)
     if name == "FITS":
         sys.modules.setdefault("models", types.ModuleType("models"))
         sys.modules["models.NLinear"] = types.ModuleType("models.NLinear")
@@ -177,6 +190,8 @@ def main(argv=None):
     parser.add_argument("--mem_limit_gb", type=float, default=11.0)
     parser.add_argument("--train_budget", type=float, default=20.0, help="giây tối đa để đo bước train")
     parser.add_argument("--infer_budget", type=float, default=3.0)
+    parser.add_argument("--remeasure", nargs="+", default=[], help="đo lại các mô hình này --rounds vòng, lấy trung vị")
+    parser.add_argument("--rounds", type=int, default=5)
     args = parser.parse_args(argv)
     if args.worker:
         return worker(args)
@@ -198,6 +213,21 @@ def main(argv=None):
         results[name] = r
         print("  ", r, flush=True)
         path.write_text(json.dumps(results, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    if args.remeasure:
+        # Latency 8 luồng của mô hình nhẹ (< vài ms) dao động mạnh giữa các tiến trình: đo lại nhiều vòng, các mô hình
+        # xen kẽ trong mỗi vòng, rồi lấy trung vị từng chỉ số thời gian/bộ nhớ.
+        runs = {n: [] for n in args.remeasure}
+        for k in range(args.rounds):
+            for name in args.remeasure:
+                print(f"===== {name} (vòng {k + 1}/{args.rounds})", flush=True)
+                runs[name].append(run_child(name, MEM_BATCH, args))
+        for name, rs in runs.items():
+            r = dict(rs[0])
+            for key in ("step_s", "epoch_s", "max_mem_mb", "infer_ms_t8", "infer_ms_t1"):
+                r[key] = statistics.median(x[key] for x in rs)
+            r["rounds"] = len(rs)
+            results[name] = r
+        path.write_text(json.dumps(results, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     import torch
     lines = ["# Hiệu năng trên máy này (kiểu Table 3 của TimeBase): Electricity, L = S = 720", "",
              f"CPU {platform.processor()}, PyTorch {torch.__version__}, eager. Max Mem: đỉnh bộ nhớ tiến trình khi train "
@@ -210,7 +240,7 @@ def main(argv=None):
         r = results[n]
         if "error" in r:
             lines.append(f"| {n} | lỗi: {r['error']} |  |  |  |  |  |  |"); continue
-        note = ""
+        note = f"trung vị {r['rounds']} vòng xen kẽ" if r.get("rounds", 1) > 1 else ""
         if "mem_over_gb" in r:
             note = (f"train batch {MEM_BATCH} vượt {r['mem_over_gb']:.0f} GB RAM; Epoch Time đo ở batch {r['batch']} "
                     f"× {TRAIN_WINDOWS // r['batch']} bước")

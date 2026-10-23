@@ -11,14 +11,17 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from compare_all import ABLATION, DATASETS, HORIZONS, SEEDS  # noqa: E402
-from make_report_tables import BRANCH, COLS, load_all  # noqa: E402
+from compare_all import OURS  # noqa: E402
+from make_report_tables import BRANCH, COLS, INFER, load_all  # noqa: E402
 from run_suite import TB_INDIVIDUAL, TB_OFFICIAL  # noqa: E402
 
 OUT = Path("slide/tables")
 SHOWN = [c for c in COLS if c != "TimeBase"]   # chỉ giữ TimeBase đo trên máy này (TimeBase*)
-NAME = {"DyTimeBase": r"\textbf{DyBAS-Net}", "TimeBase*": r"TimeBase", "TimeBase": r"TimeBase$^{\dagger}$"}
-STRONG = ["DyTimeBase", "TimeBase*", "SparseTSF", "FITS", "PatchTST", "iTransformer", "DLinear",
-          "TimeMixer"]
+SHORT = {"CycleNet/Linear": "CycleNet-L", "CycleNet/MLP": "CycleNet-M"}
+NAME = {"DyTimeBase": r"\textbf{DyBAS-Net}", "TimeBase*": r"TimeBase", "TimeBase": r"TimeBase$^{\dagger}$", **SHORT}
+STRONG = ["DyTimeBase", "TimeBase*", "CycleNet/Linear", "CycleNet/MLP", "TQNet", "SparseTSF", "FITS", "PatchTST",
+          "iTransformer", "DLinear", "TimeMixer"]
+RED, BLUE = "FF0000", "0000FF"   # tốt nhất / thứ hai
 
 
 def name(c):
@@ -38,9 +41,9 @@ def mark_color(values, v, digits=3, third=False):
     ranked = sorted({round(x, digits) for x in values})
     s = f"{v:.{digits}f}"
     if round(v, digits) == ranked[0]:
-        return rf"\textcolor[HTML]{{C00000}}{{\textbf{{{s}}}}}"
+        return rf"\textcolor[HTML]{{{RED}}}{{\textbf{{{s}}}}}"
     if len(ranked) > 1 and round(v, digits) == ranked[1]:
-        return rf"\textcolor[HTML]{{0033CC}}{{\textbf{{{s}}}}}"
+        return rf"\textcolor[HTML]{{{BLUE}}}{{\textbf{{{s}}}}}"
     if third and len(ranked) > 2 and round(v, digits) == ranked[2]:
         return rf"\textcolor{{Chocolate}}{{{s}}}"
     return s
@@ -64,7 +67,7 @@ def avg_table(table):
                 cells.append(mark_color([table[(ds, "Avg")][k][i] for k in cols], table[(ds, "Avg")][c][i],
                                         third=False))
         rows.append(f"{name(c)} & " + " & ".join(cells) + r"\\")
-        if c == "TimeBase*":
+        if c == list(OURS)[-1]:              # hết nhóm tự chạy, tiếp theo là số công bố
             rows.append(r"\midrule")
     return wrap(head + rows, "l" + "cc" * len(DATASETS))
 
@@ -74,7 +77,7 @@ def horizon_table(table, datasets):
     rows = []
     for ds in datasets:
         for k, h in enumerate(HORIZONS):
-            vals = [table[(ds, h)][c][0] for c in SHOWN]         # hạng trên 12 mô hình (bỏ TimeBase công bố)
+            vals = [table[(ds, h)][c][0] for c in SHOWN]         # hạng trên mọi mô hình trừ TimeBase công bố
             lab = rf"\multirow{{4}}{{*}}{{{ds}}}" if k == 0 else ""
             rows.append(f"{lab} & {h} & " + " & ".join(mark_color(vals, table[(ds, h)][c][0]) for c in STRONG)
                         + r"\\")
@@ -114,7 +117,7 @@ def versus_table(table):
 
 def efficiency_table():
     r = json.loads(Path("results/bench_efficiency.json").read_text(encoding="utf-8"))
-    ref = r["DyTimeBase"]["infer_ms_t8"]
+    ref = r["DyTimeBase"][INFER]
 
     def count(v):
         return f"{v / 1e9:.2f}G" if v >= 1e9 else f"{v / 1e6:.2f}M" if v >= 1e6 else f"{v / 1e3:.2f}K"
@@ -124,11 +127,11 @@ def efficiency_table():
     head = [r"Mô hình & Params & MACs & Epoch Time (s) & Infer Time (ms) & So với DyBAS-Net\\",
             r"\midrule"]
     rows = []
-    for n, x in sorted(r.items(), key=lambda kv: kv[1]["infer_ms_t8"]):
+    for n, x in sorted(r.items(), key=lambda kv: kv[1][INFER]):
         epoch = th(x["epoch_s"]) + (r"$^{\ddagger}$" if "mem_over_gb" in x else "")
-        label = r"\textbf{DyBAS-Net}" if n == "DyTimeBase" else n.replace(" (cũ)", "")
+        label = r"\textbf{DyBAS-Net}" if n == "DyTimeBase" else SHORT.get(n, n.replace(" (cũ)", ""))
         rows.append(f"{label} & {count(x['params'])} & {count(x['macs'])} & {epoch} & "
-                    f"{th(x['infer_ms_t8'], ',.2f')} & {th(x['infer_ms_t8'] / ref, ',.2f')}$\\times$" + r"\\")
+                    f"{th(x[INFER], ',.2f')} & {th(x[INFER] / ref, ',.2f')}$\\times$" + r"\\")
     return wrap(head + rows, "lrrrrr")
 
 

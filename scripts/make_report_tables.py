@@ -10,25 +10,30 @@ import statistics
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from compare_all import ABLATION, DATASETS, HORIZONS, PUBLISHED, SEEDS  # noqa: E402
+from compare_all import ABLATION, DATASETS, HORIZONS, OURS, PUBLISHED, SEEDS, load_runs, variant  # noqa: E402
 from run_suite import TB_INDIVIDUAL, TB_OFFICIAL  # noqa: E402
 
 OUT = Path("docs/tables")
-BRANCH = {"ETTh1": (64, 0.1, 0.1), "ETTh2": (64, 0.6, 0.6), "ETTm1": (64, 0.1, 0.2), "ETTm2": (32, 0.1, 0.1),
-          "Weather": (64, 0.1, 0.1)}      # Đồ án I, Bảng 3.1: d_model, p1, p2
-COLS = ["DyTimeBase", "TimeBase*"] + PUBLISHED
-HEAD = {"DyTimeBase": r"\textbf{DyTimeBase}", "TimeBase*": r"TimeBase$^{*}$", "TimeBase": r"TimeBase$^{\dagger}$"}
+# d_model, p1, p2 của nhánh trộn kênh: Đồ án I, Bảng 3.1; ETTh2, ETTm2 theo lưới DropFusion (compare_all.TUNED).
+BRANCH = {"ETTh1": (64, 0.1, 0.1), "ETTh2": (64, 0.3, 0.5), "ETTm1": (64, 0.1, 0.2), "ETTm2": (64, 0.4, 0.6),
+          "Weather": (64, 0.1, 0.1)}
+COLS = list(OURS) + PUBLISHED
+SHORT = {"CycleNet/Linear": "CycleNet-L", "CycleNet/MLP": "CycleNet-M"}
+# Infer Time như Table 3 của TimeBase: thời gian dự báo một mẫu trên CPU. Dùng 1 luồng: khớp số TimeBase công bố
+# (TimeBase 0.98 ms, SparseTSF 2.59 ms so với 1.01 / 2.39 ms đo ở đây) và ổn định giữa các lần đo.
+INFER = "infer_ms_t1"
+HEAD = {"DyTimeBase": r"\textbf{DyTimeBase}", "TimeBase*": r"TimeBase$^{*}$", "TimeBase": r"TimeBase$^{\dagger}$", **SHORT}
 
 
 def load_all():
     pub = json.loads(Path("results/published_timebase_table10.json").read_text(encoding="utf-8"))["results"]
-    runs = {ds: json.loads(Path(p).read_text(encoding="utf-8")) for ds, p in DATASETS.items()}
+    runs = {ds: load_runs(ds) for ds in DATASETS}
     table = {}
     for ds in DATASETS:
         for h in HORIZONS:
             row = {}
-            for label, v in (("DyTimeBase", "dytbase_off"), ("TimeBase*", "timebase_off")):
-                rs = [runs[ds][f"{v}_S{h}_seed{s}"] for s in SEEDS]
+            for label in OURS:
+                rs = [runs[ds][f"{variant(ds, label)}_S{h}_seed{s}"] for s in SEEDS]
                 row[label] = (statistics.mean(r["mse"] for r in rs), statistics.mean(r["mae"] for r in rs),
                               statistics.stdev(r["mse"] for r in rs))
             for m in PUBLISHED:
@@ -51,9 +56,11 @@ def mark(values, v):
 def accuracy_table(table, metric, idx):
     lines = [r"\begin{sidewaystable}", r"\centering",
              rf"\caption{{Kết quả dự báo dài hạn ({metric}), độ dài đầu vào $L=720$ cho mọi mô hình. "
-             r"DyTimeBase và TimeBase$^{*}$: tự chạy, trung bình 3 seed. Các cột còn lại (TimeBase$^{\dagger}$ là số "
+             r"DyTimeBase và TimeBase$^{*}$: tự chạy, trung bình 3 seed. CycleNet-L/-M (CycleNet/Linear, CycleNet/MLP"
+             r"~\cite{cyclenet}) và TQNet~\cite{tqnet}: tự chạy trong cùng quy trình, trung bình 3 seed, siêu tham số chính "
+             r"thức của từng mô hình. Các cột còn lại (TimeBase$^{\dagger}$ là số "
              r"công bố): trích từ Table 10 của~\cite{timebase}. \textbf{Đậm}: tốt nhất; \underline{gạch chân}: thứ hai.}",
-             rf"\label{{tab:acc-{metric.lower()}}}", r"\scriptsize", r"\setlength{\tabcolsep}{3.2pt}",
+             rf"\label{{tab:acc-{metric.lower()}}}", r"\scriptsize", r"\setlength{\tabcolsep}{2.4pt}",
              r"\begin{tabular}{@{}ll" + "c" * len(COLS) + "@{}}", r"\toprule",
              "Dataset & $S$ & " + " & ".join(HEAD.get(c, c) for c in COLS) + r"\\", r"\midrule"]
     for ds in DATASETS:
@@ -141,7 +148,7 @@ def ablation(runs):
 
 def efficiency():
     r = json.loads(Path("results/bench_efficiency.json").read_text(encoding="utf-8"))
-    ref = r["DyTimeBase"]["infer_ms_t8"]
+    ref = r["DyTimeBase"][INFER]
 
     def count(v):
         return f"{v / 1e9:.2f}G" if v >= 1e9 else f"{v / 1e6:.2f}M" if v >= 1e6 else f"{v / 1e3:.2f}K"
@@ -151,19 +158,21 @@ def efficiency():
     lines = [r"\begin{table}[H]", r"\centering",
              r"\caption{Hiệu năng tính toán trên cùng một máy CPU, cấu hình như Table~3 của~\cite{timebase}: Electricity "
              r"($C=321$), $L=S=720$. Max Mem: đỉnh bộ nhớ RAM khi huấn luyện với batch 12; Epoch Time: thời gian một "
-             r"bước huấn luyện (batch 12) nhân số bước của một epoch (1\,414); Infer Time: dự báo 1 mẫu, 8 luồng. "
-             r"Sắp xếp theo Infer Time.}",
+             r"bước huấn luyện (batch 12) nhân số bước của một epoch (1\,414); Infer Time: thời gian dự báo một mẫu trên CPU "
+             r"(1 luồng), như~\cite{timebase}; các mô hình nhẹ lấy trung vị của 5 lần đo. Sắp xếp theo Infer Time.}",
              r"\label{tab:efficiency}", r"\small", r"\resizebox{\textwidth}{!}{\begin{tabular}{@{}lrrrrrr@{}}", r"\toprule",
              r"Mô hình & Params & MACs & Max Mem (MB) & Epoch Time (s) & Infer Time (ms) & So với DyTimeBase\\",
              r"\midrule"]
-    for n, x in sorted(r.items(), key=lambda kv: kv[1]["infer_ms_t8"]):
+    for n, x in sorted(r.items(), key=lambda kv: kv[1][INFER]):
         mem = rf"$>${th(x['mem_over_gb'] * 1024)}$^{{\ddagger}}$" if "mem_over_gb" in x else th(x["max_mem_mb"])
-        name = r"\textbf{DyTimeBase}" if n == "DyTimeBase" else n.replace("(cũ)", "(Đồ án I)")
+        name = r"\textbf{DyTimeBase}" if n == "DyTimeBase" else SHORT.get(n, n.replace("(cũ)", "(Đồ án I)"))
         lines.append(f"{name} & {count(x['params'])} & {count(x['macs'])} & {mem} & {th(x['epoch_s'])} & "
-                     f"{th(x['infer_ms_t8'], ',.2f')} & {th(x['infer_ms_t8'] / ref, ',.2f')}$\\times$" + r"\\")
-    lines += [r"\bottomrule", r"\end{tabular}}", "",
-              r"\footnotesize{$^{\ddagger}$ Vượt ngưỡng 11 GB RAM ở batch 12; Epoch Time của mô hình này đo ở batch 4.}",
-              r"\end{table}"]
+                     f"{th(x[INFER], ',.2f')} & {th(x[INFER] / ref, ',.2f')}$\\times$" + r"\\")
+    lines += [r"\bottomrule", r"\end{tabular}}"]
+    if any("mem_over_gb" in x for x in r.values()):
+        lines += ["", r"\footnotesize{$^{\ddagger}$ Vượt ngưỡng 11 GB RAM ở batch 12; Epoch Time của mô hình này đo ở "
+                      r"batch 4.}"]
+    lines += [r"\end{table}"]
     return "\n".join(lines) + "\n"
 
 

@@ -41,6 +41,23 @@ TB_OFFICIAL = {
                 720: (0.04, 512, 0.05, 4, 6)},
 }
 TB_INDIVIDUAL = {"ETTh1": False, "ETTh2": False, "ETTm1": False, "ETTm2": False, "Weather": True}
+# Lịch train chung của CycleNet/TQNet (run.py chính thức): 30 epoch, patience 5, lradj type3, Adam không weight decay,
+# không clip gradient. CycleNet theo scripts/CycleNet/{Linear,MLP}-Input-720/*.sh (lr 5e-3 / 5e-4, batch 256, MLP
+# d_model 512). TQNet chỉ có script L = 96 (scripts/TQNet/*.sh): giữ nguyên lr 1e-3, d_model 512, dropout 0.5,
+# batch 256 (Weather 64), chỉ đổi seq_len.
+DF_GRID = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6)   # p1 (DropEdge), p2 (DropNeuron) cho lưới dytbase_d64_p*
+PERIODIC_TRAIN = {"epochs": 30, "patience": 5, "lr_schedule": "type3", "weight_decay": 0.0, "grad_clip": 0.0}
+
+
+def periodic(dataset):
+    w = CYCLE[dataset]
+    return {
+        "cyclenet_off": {"model": "cyclenet", "cycle_len": w, "batch_size": 256, "lr": 0.005, **PERIODIC_TRAIN},
+        "cyclenet_mlp_off": {"model": "cyclenet_mlp", "cycle_len": w, "batch_size": 256, "lr": 0.0005, "d_model": 512,
+                             **PERIODIC_TRAIN},
+        "tqnet_off": {"model": "tqnet", "cycle_len": w, "batch_size": 64 if dataset == "Weather" else 256, "lr": 0.001,
+                      "d_model": 512, "dropout": 0.5, **PERIODIC_TRAIN},
+    }
 
 
 def official(dataset, model, **extra):
@@ -76,6 +93,10 @@ def variants(dataset):
             "dytbase_nointra": official(dataset, "dytimebase", mix_lr=5e-4, use_intra=False),
             # Cùng kiến trúc, lr nhánh trộn kênh gấp 4 (lịch type3 giảm lr rất nhanh).
             "dytbase_mixlr2e-3": official(dataset, "dytimebase", mix_lr=2e-3)} if dataset in TB_OFFICIAL else {}),
+        **periodic(dataset),
+        # Lưới DropFusion của nhánh trộn kênh (d_model 64 cố định, xương sống như dytbase_off); chọn theo val loss.
+        **({f"dytbase_d64_p{p1:g}_{p2:g}": official(dataset, "dytimebase", mix_lr=5e-4, d_model=64, p1=p1, p2=p2)
+            for p1 in DF_GRID for p2 in DF_GRID} if dataset in TB_OFFICIAL else {}),
     }
 
 

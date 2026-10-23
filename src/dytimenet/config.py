@@ -7,6 +7,10 @@ from pathlib import Path
 
 import yaml
 
+MODEL_NAMES = ("dytimenet", "rlinear", "dlinear", "timebase", "sparsetsf", "dytimebase",
+               "cyclenet", "cyclenet_mlp", "tqnet")
+CYCLE_MODELS = ("cyclenet", "cyclenet_mlp", "tqnet")   # cần pha chu kỳ (cycle_len > 0)
+
 
 @dataclass
 class ExperimentConfig:
@@ -89,8 +93,12 @@ class ExperimentConfig:
         for name in ("data_path", "save_dir"):
             if not isinstance(getattr(self, name), str) or not getattr(self, name).strip():
                 raise ValueError(f"{name} must be a non-empty path string")
-        if self.model not in ("dytimenet", "rlinear", "dlinear", "timebase", "sparsetsf", "dytimebase"):
-            raise ValueError("model must be dytimenet, rlinear, dlinear, timebase, sparsetsf, or dytimebase")
+        if self.model not in MODEL_NAMES:
+            raise ValueError(f"model must be one of: {', '.join(MODEL_NAMES)}")
+        if self.model in CYCLE_MODELS and self.cycle_len == 0:
+            raise ValueError(f"{self.model} needs cycle_len > 0")
+        if self.model == "tqnet" and self.seq_len % 4:
+            raise ValueError("tqnet needs seq_len divisible by 4 (4 attention heads)")
         for name in ("mix_lr", "orth_weight", "grad_clip"):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
@@ -154,7 +162,7 @@ def training_parser():
         if name == "target_cols":
             parser.add_argument("--target_cols", nargs="+", default=None)
         elif name == "model":
-            parser.add_argument("--model", choices=("dytimenet", "rlinear", "dlinear", "timebase", "sparsetsf", "dytimebase"), default=None)
+            parser.add_argument("--model", choices=MODEL_NAMES, default=None)
         elif name == "lr_schedule":
             parser.add_argument("--lr_schedule", choices=("cosine", "type3"), default=None)
         elif name == "cross_residual":
