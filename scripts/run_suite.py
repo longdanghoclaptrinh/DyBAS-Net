@@ -19,8 +19,9 @@ import torch
 
 from dytimenet.config import load_config
 
-# Chu kỳ dài nhất ổn định của từng dataset (như Table 1 của CycleNet): ngày theo tần số lấy mẫu.
-CYCLE = {"ETTh1": 24, "ETTh2": 24, "ETTm1": 96, "ETTm2": 96, "Weather": 144}
+# Chu kỳ dài nhất ổn định của từng dataset (như Table 1 của CycleNet): ngày theo tần số lấy mẫu; Electricity và
+# Traffic dùng tuần (168 giờ) như scripts/*/electricity.sh, traffic.sh của CycleNet/TQNet.
+CYCLE = {"ETTh1": 24, "ETTh2": 24, "ETTm1": 96, "ETTm2": 96, "Weather": 144, "Electricity": 168, "Traffic": 168}
 # Độ dài đoạn P của TimeBase theo paper (Phụ lục C.1): chu kỳ tự nhiên, Weather dùng P = 4.
 TB_PERIOD = {"ETTh1": 24, "ETTh2": 24, "Weather": 4}
 TB_LRS = (0.005, 0.02, 0.08)
@@ -39,24 +40,39 @@ TB_OFFICIAL = {
               720: (0.04, 64, 0.01, 6, 20)},
     "Weather": {96: (0.04, 512, 0.02, 4, 6), 192: (0.04, 512, 0.02, 4, 6), 336: (0.08, 512, 0.05, 4, 6),
                 720: (0.04, 512, 0.05, 4, 6)},
+    "Electricity": {96: (0.04, 128, 0.02, 24, 6), 192: (0.04, 128, 0.02, 24, 6), 336: (0.04, 128, 0.02, 24, 6),
+                    720: (0.08, 128, 0.08, 24, 6)},
+    "Traffic": {96: (0.04, 128, 0.05, 24, 6), 192: (0.04, 128, 0.03, 24, 8), 336: (0.08, 128, 0.03, 24, 15),
+                720: (0.04, 128, 0.03, 24, 8)},
 }
-TB_INDIVIDUAL = {"ETTh1": False, "ETTh2": False, "ETTm1": False, "ETTm2": False, "Weather": True}
+TB_INDIVIDUAL = {"ETTh1": False, "ETTh2": False, "ETTm1": False, "ETTm2": False, "Weather": True,
+                 "Electricity": False, "Traffic": False}
 # Lịch train chung của CycleNet/TQNet (run.py chính thức): 30 epoch, patience 5, lradj type3, Adam không weight decay,
-# không clip gradient. CycleNet theo scripts/CycleNet/{Linear,MLP}-Input-720/*.sh (lr 5e-3 / 5e-4, batch 256, MLP
-# d_model 512). TQNet chỉ có script L = 96 (scripts/TQNet/*.sh): giữ nguyên lr 1e-3, d_model 512, dropout 0.5,
-# batch 256 (Weather 64), chỉ đổi seq_len.
+# không clip gradient. CycleNet theo scripts/CycleNet/{Linear,MLP}-Input-720/*.sh (MLP d_model 512). TQNet chỉ có
+# script L = 96 (scripts/TQNet/*.sh): giữ nguyên siêu tham số, chỉ đổi seq_len; d_model 512.
+#   giá trị: (batch, lr) của CycleNet/Linear, CycleNet/MLP, TQNet và dropout của TQNet (không có --dropout = 0).
+PERIODIC_OFFICIAL = {
+    "ETTh1": ((256, 0.005), (256, 0.0005), (256, 0.001), 0.5),
+    "ETTh2": ((256, 0.005), (256, 0.0005), (256, 0.001), 0.5),
+    "ETTm1": ((256, 0.005), (256, 0.0005), (256, 0.001), 0.5),
+    "ETTm2": ((256, 0.005), (256, 0.0005), (256, 0.001), 0.5),
+    "Weather": ((256, 0.005), (256, 0.0005), (64, 0.001), 0.5),
+    "Electricity": ((64, 0.005), (64, 0.001), (32, 0.003), 0.0),
+    "Traffic": ((64, 0.005), (64, 0.0005), (16, 0.003), 0.0),
+}
 DF_GRID = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6)   # p1 (DropEdge), p2 (DropNeuron) cho lưới dytbase_d64_p*
 PERIODIC_TRAIN = {"epochs": 30, "patience": 5, "lr_schedule": "type3", "weight_decay": 0.0, "grad_clip": 0.0}
 
 
 def periodic(dataset):
     w = CYCLE[dataset]
+    (b1, lr1), (b2, lr2), (b3, lr3), drop = PERIODIC_OFFICIAL[dataset]
     return {
-        "cyclenet_off": {"model": "cyclenet", "cycle_len": w, "batch_size": 256, "lr": 0.005, **PERIODIC_TRAIN},
-        "cyclenet_mlp_off": {"model": "cyclenet_mlp", "cycle_len": w, "batch_size": 256, "lr": 0.0005, "d_model": 512,
+        "cyclenet_off": {"model": "cyclenet", "cycle_len": w, "batch_size": b1, "lr": lr1, **PERIODIC_TRAIN},
+        "cyclenet_mlp_off": {"model": "cyclenet_mlp", "cycle_len": w, "batch_size": b2, "lr": lr2, "d_model": 512,
                              **PERIODIC_TRAIN},
-        "tqnet_off": {"model": "tqnet", "cycle_len": w, "batch_size": 64 if dataset == "Weather" else 256, "lr": 0.001,
-                      "d_model": 512, "dropout": 0.5, **PERIODIC_TRAIN},
+        "tqnet_off": {"model": "tqnet", "cycle_len": w, "batch_size": b3, "lr": lr3, "d_model": 512, "dropout": drop,
+                      **PERIODIC_TRAIN},
     }
 
 
@@ -108,6 +124,7 @@ def main(argv=None):
     parser.add_argument("--seeds", type=int, nargs="+", default=[2021, 2022, 2023])
     parser.add_argument("--threads", type=int, default=8)
     parser.add_argument("--seq_len", type=int, default=96)
+    parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu", help="cuda: chạy trên GPU (ví dụ Colab)")
     parser.add_argument("--results", default=None, help="file JSON kết quả (mặc định results/suite_<tag>.json)")
     args = parser.parse_args(argv)
     table = variants(args.dataset)
@@ -128,12 +145,12 @@ def main(argv=None):
                 torch.set_num_threads(args.threads)
                 overrides = table[name](horizon) if callable(table[name]) else table[name]
                 config = load_config(f"configs/{args.dataset}.yaml", {
-                    "seq_len": args.seq_len, "pred_len": horizon, "seed": seed, "device": "cpu",
+                    "seq_len": args.seq_len, "pred_len": horizon, "seed": seed, "device": args.device,
                     "save_dir": f"checkpoints/suite_{tag}", **overrides})
                 print(f"\n===== {args.dataset} {key} =====", flush=True)
                 checkpoint, summary = train(config)
                 history = pd.read_csv(Path(checkpoint).parent / "history.csv")
-                runs[key] = {"variant": name, "overrides": overrides, "seq_len": args.seq_len,
+                runs[key] = {"variant": name, "overrides": overrides, "seq_len": args.seq_len, "device": args.device,
                              "pred_len": horizon, "seed": seed, "best_val": float(history["val_loss"].min()),
                              "mse": summary["MSE"], "mae": summary["MAE"], "best_epoch": summary["best_epoch"],
                              "epochs_run": int(len(history)), "train_seconds": summary["train_seconds"],
