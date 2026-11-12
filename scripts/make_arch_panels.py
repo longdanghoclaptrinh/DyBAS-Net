@@ -7,7 +7,6 @@ trên một cửa sổ thật của tập test (dự báo bắt đầu 00:00 th�
 khi nhờ công cụ vẽ ghép vào sơ đồ). Ví dụ: python scripts/make_arch_panels.py
 """
 
-import os
 from pathlib import Path
 import sys
 
@@ -24,7 +23,7 @@ from dytimenet.models import build_model  # noqa: E402
 from make_intro_figure import load as intro_load, R as INTRO_R  # noqa: E402
 
 CKPT = Path("checkpoints/fix_Load_L720/Load_L720_S96_seed2021_20261027T200708939037Z/best.pt")
-CSV = Path("configs/load_new.csv")
+CSV = Path("data/load_new.csv")
 OUT = Path("paper/figures/arch_panels")
 FORECAST_FROM = "2024-10-07"          # thứ Hai đầu tiên của cửa sổ minh họa (tuần bình thường, ngoài Tết)
 VAR = 0                                 # biến minh họa cho các khối theo từng biến: total_consumption_mw
@@ -274,12 +273,7 @@ def draw_all(r):
 
 def draw_intro():
     """Ba hình của Introduction, chữ tiếng Anh, dùng làm hình con (cùng dữ liệu Load)."""
-    here = Path.cwd()
-    os.chdir(CSV.parent)                       # make_intro_figure.load đọc "load_new.csv" ở thư mục hiện tại
-    try:
-        seg, weekend, corr, recon, roll = intro_load()
-    finally:
-        os.chdir(here)
+    seg, weekend, corr, recon, roll = intro_load()
     P = seg.shape[1]
     fig, ax = panel()
     for day, off in zip(seg, weekend):

@@ -36,7 +36,7 @@ def low_rank(m, r):
 
 
 def load():
-    df = pd.read_csv("load_new.csv", parse_dates=["timestamp"]).set_index("timestamp")
+    df = pd.read_csv("data/load_new.csv", parse_dates=["timestamp"]).set_index("timestamp")
     total = df["total_consumption_mw"]
     days = total[START:].iloc[:DAYS * P]
     seg = days.values.reshape(DAYS, P)

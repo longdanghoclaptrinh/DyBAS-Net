@@ -38,14 +38,18 @@ python -m pytest -q
 
 ## Dữ liệu
 
-Repo không kèm file CSV. Xem cách tải và chuẩn bị từng bộ trong [data/README.md](data/README.md).
+Cả 9 bộ dữ liệu đã có sẵn trong [data/](data/), clone về là chạy được ngay. Nguồn gốc của từng bộ ghi trong
+[data/README.md](data/README.md).
 
-| Bộ dữ liệu | Số biến | Tần suất | Nguồn |
-| --- | ---: | --- | --- |
-| ETTh1, ETTh2 | 7 | 1 giờ | benchmark công khai |
-| ETTm1, ETTm2 | 7 | 15 phút | benchmark công khai |
-| Weather | 21 | 10 phút | benchmark công khai |
-| Tetouan, Panama | 8, 13 | 10 phút, 1 giờ | phụ tải công khai, chuẩn bị bằng `scripts/prepare_load_data.py` |
+| Bộ dữ liệu | File | Số biến | Tần suất |
+| --- | --- | ---: | --- |
+| ETTh1, ETTh2 | `ETTh1.csv`, `ETTh2.csv` | 7 | 1 giờ |
+| ETTm1, ETTm2 | `ETTm1.csv`, `ETTm2.csv` | 7 | 15 phút |
+| Weather | `weather.csv` | 21 | 10 phút |
+| Electricity | `electricity.csv` | 321 | 1 giờ |
+| Tetouan | `tetouan.csv` | 8 | 10 phút |
+| Panama | `panama.csv` | 13 | 1 giờ |
+| Load (phụ tải Hà Nội) | `load_new.csv` | 10 | 1 giờ |
 
 ## Chạy lại thí nghiệm
 
@@ -99,6 +103,9 @@ python scripts/run_external.py --help      # các tùy chọn --tslib, --fits, .
 
 Ba script `scripts/run_*.sh` là các chuỗi chạy GPU đã dùng. Đặt biến `PY` trỏ tới Python của venv có CUDA, ví dụ
 `PY=/path/to/python bash scripts/run_sparsetsf.sh`.
+
+Electricity (321 biến) quá nặng cho CPU. Notebook [colab/run_electricity_traffic.ipynb](colab/run_electricity_traffic.ipynb)
+chạy trên Colab GPU (*Runtime → Run all*).
 
 ### 5. Tổng hợp bảng và hình
 

@@ -58,7 +58,7 @@ from dytimenet.engine.trainer import EarlyStopping, cosine_lr, run_epoch
 from dytimenet.utils.seed import set_seed
 
 SEQ_LEN = 720
-DATA = {"Load": ("load_new.csv", "timestamp"), "Exchange": ("data/exchange_rate.csv", "date"),
+DATA = {"Load": ("data/load_new.csv", "timestamp"), "Exchange": ("data/exchange_rate.csv", "date"),
         "Tetouan": ("data/tetouan.csv", "date"), "Panama": ("data/panama.csv", "date"), "PJM": ("data/pjm.csv", "date"),
         **{ds: (f"data/{ds}.csv", "date") for ds in ("ETTh1", "ETTh2", "ETTm1", "ETTm2")},
         "Weather": ("data/weather.csv", "date")}

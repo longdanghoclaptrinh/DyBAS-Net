@@ -1,11 +1,18 @@
 # Local datasets and experiment artifacts; keep directory documentation.
 /data/*
 !/data/README.md
+!/data/ETTh1.csv
+!/data/ETTh2.csv
+!/data/ETTm1.csv
+!/data/ETTm2.csv
+!/data/weather.csv
+!/data/tetouan.csv
+!/data/panama.csv
+!/data/electricity.csv
+!/data/load_new.csv
 /checkpoints/
 /local/
 /logs/
-# Dữ liệu phụ tải Hà Nội (EVN) không công khai
-/configs/*.csv
 /runs/
 /outputs/
 *.pt
