@@ -96,10 +96,14 @@ class _Segmented(nn.Module):
         B, C = y.shape[:2]
         return y.transpose(2, 3).reshape(B, C, -1)[..., :self.pred_len]       # [B, C, S]
 
-    def _normalize(self, seg, period_norm):
-        """Trừ mean theo pha (period norm của TimeBase, trung bình trên N đoạn) hoặc mean cả cửa sổ."""
+    def _normalize(self, seg, period_norm, inst_std=False):
+        """Trừ mean theo pha (period norm của TimeBase, trung bình trên N đoạn) hoặc mean cả cửa sổ.
+
+        inst_std=True: chia thêm cho std của cả cửa sổ mỗi kênh; trả std để nhân lại ở đầu ra (1 khi tắt).
+        """
         mean = seg.mean(-1, keepdim=True) if period_norm else seg.mean((-2, -1), keepdim=True)
-        return seg - mean, mean
+        std = seg.std((-2, -1), keepdim=True, unbiased=False) + 1e-5 if inst_std else 1.0
+        return (seg - mean) / std, mean, std
 
     def count_parameters(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -126,9 +130,9 @@ class TimeBase(_Segmented):
     """
 
     def __init__(self, num_vars: int, seq_len: int, pred_len: int, period: int = 24, basis_num: int = 6,
-                 period_norm: bool = False, individual: bool = False, **_):
+                 period_norm: bool = False, individual: bool = False, inst_std: bool = False, **_):
         super().__init__(seq_len, pred_len, period)
-        self.period_norm = period_norm
+        self.period_norm, self.inst_std = period_norm, inst_std
         if individual:
             self.basis = PerChannelLinear(num_vars, self.n_in, basis_num)
             self.forecast = PerChannelLinear(num_vars, basis_num, self.n_out)
@@ -138,7 +142,7 @@ class TimeBase(_Segmented):
         self.aux_loss = None
 
     def forward(self, x: torch.Tensor, cycle_index: torch.Tensor = None) -> torch.Tensor:
-        seg, mean = self._normalize(self._segments(x), self.period_norm)
+        seg, mean, std = self._normalize(self._segments(x), self.period_norm, self.inst_std)
         e = self.basis(seg)                                                          # [B, C, P, R]
         self.aux_loss = orthogonal_loss(e) if self.training else None
-        return self._merge(self.forecast(e) + mean)
+        return self._merge(self.forecast(e) * std + mean)

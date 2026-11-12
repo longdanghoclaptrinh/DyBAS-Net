@@ -20,3 +20,5 @@ CPU AMD64 Family 25 Model 116 Stepping 1, AuthenticAMD, PyTorch 2.6.0+cpu, eager
 | CycleNet/Linear | 573.05K | 166.41M | 152.64 | 73.74 | 1.47 | 6.71 | trung vị 5 vòng xen kẽ |
 | CycleNet/MLP | 792.44K | 236.67M | 162.02 | 92.46 | 1.84 | 7.93 | trung vị 5 vòng xen kẽ |
 | TQNet | 3.39M | 1.22G | 416.90 | 308.60 | 7.14 | 25.04 |  |
+| MS-FLOW | 17.55M | 44.47G | 11105.96 | 71191.17 | 408.11 | 2099.54 |  |
+| GTR | 1.84M | 582.93M | 380.89 | 435.47 | 7.90 | 28.37 |  |

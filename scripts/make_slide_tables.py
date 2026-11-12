@@ -11,21 +11,72 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from compare_all import ABLATION, DATASETS, HORIZONS, SEEDS  # noqa: E402
-from compare_all import OURS  # noqa: E402
+from compare_all import OURS, PUBLISHED, variant  # noqa: E402
 from make_report_tables import BRANCH, COLS, INFER, load_all  # noqa: E402
-from run_suite import TB_INDIVIDUAL, TB_OFFICIAL  # noqa: E402
+from run_suite import TB_OFFICIAL  # noqa: E402
+from run_fix import TUNED as FIX_TUNED  # noqa: E402
 
 OUT = Path("slide/tables")
 SHOWN = [c for c in COLS if c != "TimeBase"]   # chỉ giữ TimeBase đo trên máy này (TimeBase*)
-SHORT = {"CycleNet/Linear": "CycleNet-L", "CycleNet/MLP": "CycleNet-M"}
+# Tự chạy bằng code chính thức trên GPU (scripts/run_external.py → results/external_<bộ>_L720.json).
+EXTERNAL = {"MS-FLOW": "MSFLOW", "GTR": "GTR"}
+# Bảng độ chính xác của slide: MS-FLOW thay DyTimeNet; GTR (tự chạy) thay DLinear (số công bố). DUET, LightGTS (chạy dở) và TimeEmb đã chạy (results/external_*), không đưa vào.
+SELF = ["DyTimeBase", "TimeBase*", "MS-FLOW", "CycleNet/Linear", "CycleNet/MLP", "TQNet", "GTR"]
+PUB = [c for c in PUBLISHED if c not in ("TimeBase", "DLinear")]   # SparseTSF: số công bố (bản tự chạy sparsetsf_off giữ trong results/suite_*, không đưa vào)
+SHORT = {}   # giữ tên như bài CycleNet: CycleNet/Linear, CycleNet/MLP
 NAME = {"DyTimeBase": r"\textbf{DyBAS-Net}", "TimeBase*": r"TimeBase", "TimeBase": r"TimeBase$^{\dagger}$", **SHORT}
 STRONG = ["DyTimeBase", "TimeBase*", "CycleNet/Linear", "CycleNet/MLP", "TQNet", "SparseTSF", "FITS", "PatchTST",
           "iTransformer", "DLinear", "TimeMixer"]
-RED, BLUE = "FF0000", "0000FF"   # tốt nhất / thứ hai
+RED, BLUE = "FF0000", "0000FF"   # tốt nhất / thứ hai (bảng μ ± σ: xanh = chưa phân biệt được với tốt nhất)
+# Số công bố (results/published_timebase_table10.json, Table 10 của TimeBase): trích dẫn bài gốc cạnh tên mô hình.
+CITE = {"TimeBase": "Huang2025TimeBase", "SparseTSF": "Lin2024SparseTSF", "TimeMixer": "Wang2024TimeMixer",
+        "FITS": "Xu2024FITS", "iTransformer": "Liu2024iTransformer", "DLinear": "Zeng2023DLinear",
+        "PatchTST": "Nie2023PatchTST", "TimesNet": "Wu2023TimesNet", "FEDformer": "Zhou2022FEDformer",
+        "Autoformer": "Wu2021Autoformer", "Informer": "Zhou2021Informer"}
+EXTRA = ("Load",)   # bộ dữ liệu thêm (mọi mô hình tự chạy), chỉ có ở bảng siêu tham số và bảng riêng
 
 
-def name(c):
-    return NAME.get(c, c)
+def name(c, cite=False):
+    return NAME.get(c, c) + (rf"~\cite{{{CITE[c]}}}" if cite and c in CITE else "")
+
+
+def seed_stats(runs, v, hs):
+    """[(μ, σ) của MSE, (μ, σ) của MAE]: trung bình trên các horizon hs của từng seed, rồi μ, σ qua 3 seed."""
+    per_seed = [[statistics.mean(runs[f"{v}_S{h}_seed{s}"][m] for h in hs) for s in SEEDS] for m in ("mse", "mae")]
+    return [(statistics.mean(x), statistics.stdev(x)) for x in per_seed]
+
+
+def bench_stats(runs, table):
+    """(dataset, horizon hoặc "Avg") → mô hình → [(μ, σ) MSE, (μ, σ) MAE]; số công bố có σ = None."""
+    out = {}
+    for ds in DATASETS:
+        ext = json.loads(Path(f"results/external_{ds}_L720.json").read_text(encoding="utf-8"))
+        for key in HORIZONS + ("Avg",):
+            hs = HORIZONS if key == "Avg" else (key,)
+            out[(ds, key)] = {**{c: seed_stats(ext, EXTERNAL[c], hs) if c in EXTERNAL else
+                                 seed_stats(runs[ds], variant(ds, c), hs) for c in SELF},
+                              **{c: [(table[(ds, key)][c][i], None) for i in (0, 1)] for c in PUB}}
+    return out
+
+
+def overlap(a, b):
+    """Khoảng [μ − σ, μ + σ] của a và b chồng lấn (σ = None: số công bố, một giá trị)."""
+    return a[0] - (a[1] or 0) <= b[0] + (b[1] or 0) and b[0] - (b[1] or 0) <= a[0] + (a[1] or 0)
+
+
+def compare(a, b):
+    """−1: a tốt hơn b rõ ràng (khoảng μ ± σ không chồng lấn, μ_a nhỏ hơn); 1: kém hơn; 0: chưa phân biệt được."""
+    return 0 if overlap(a, b) else (-1 if a[0] < b[0] else 1)
+
+
+def mark_std(cells, c, digits=3):
+    """μ ± σ; đỏ đậm = μ thấp nhất, xanh = khoảng μ ± σ chồng lấn với khoảng của mô hình tốt nhất."""
+    best = min(cells, key=lambda k: cells[k][0])
+    m, sd = cells[c]
+    s = f"{m:.{digits}f}" + (rf"{{\tiny$\pm${sd:.{digits}f}}}" if sd is not None else "")
+    if c == best:
+        return rf"\textcolor[HTML]{{{RED}}}{{\textbf{{{s}}}}}"
+    return rf"\textcolor[HTML]{{{BLUE}}}{{{s}}}" if overlap(cells[c], cells[best]) else s
 
 
 def mark(values, v, digits=3):
@@ -54,20 +105,19 @@ def wrap(body, cols, width=r"\textwidth"):
                       r"\bottomrule", r"\end{tabular}}"]) + "\n"
 
 
-def avg_table(table):
+def avg_table(stats):
     head = [r"\multirow{2}{*}{Mô hình} & " + " & ".join(rf"\multicolumn{{2}}{{c}}{{{d}}}" for d in DATASETS) + r"\\",
             "".join(rf"\cmidrule(lr){{{2 + 2 * k}-{3 + 2 * k}}}" for k in range(len(DATASETS))),
             " & " + " & ".join("MSE & MAE" for _ in DATASETS) + r"\\", r"\midrule"]
     rows = []
-    cols = SHOWN
+    cols = SELF + PUB
     for c in cols:
         cells = []
         for ds in DATASETS:
             for i in (0, 1):
-                cells.append(mark_color([table[(ds, "Avg")][k][i] for k in cols], table[(ds, "Avg")][c][i],
-                                        third=False))
-        rows.append(f"{name(c)} & " + " & ".join(cells) + r"\\")
-        if c == list(OURS)[-1]:              # hết nhóm tự chạy, tiếp theo là số công bố
+                cells.append(mark_std({k: stats[(ds, "Avg")][k][i] for k in cols}, c))
+        rows.append(f"{name(c, cite=c in PUBLISHED)} & " + " & ".join(cells) + r"\\")
+        if c == SELF[-1]:                    # hết nhóm tự chạy, tiếp theo là số công bố
             rows.append(r"\midrule")
     return wrap(head + rows, "l" + "cc" * len(DATASETS))
 
@@ -86,19 +136,19 @@ def horizon_table(table, datasets):
     return wrap(head + rows, "ll" + "c" * len(STRONG))
 
 
-def h2h_table(table):
-    head = [r"Đối thủ & Thắng & Hòa & Thua & DyBAS-Net tốt hơn (MSE TB) & DyBAS-Net kém hơn (MSE TB)\\", r"\midrule"]
+def h2h_table(stats):
+    """Thắng/hòa/thua theo MSE với tiêu chuẩn compare (μ ± σ qua 3 seed); 20 ô = 5 dataset × 4 horizon."""
+    head = [r"Đối thủ & Thắng & Hòa & Thua & DyBAS-Net tốt hơn & Chưa phân biệt & DyBAS-Net kém hơn\\",
+            r" & \multicolumn{3}{c}{(20 ô dataset $\times$ $S$)} & \multicolumn{3}{c}{(MSE trung bình 4 horizon)}\\",
+            r"\midrule"]
     rows = []
-    for c in SHOWN[1:]:
-        w = t = l = 0
-        for ds in DATASETS:
-            for h in HORIZONS:
-                a, b = round(table[(ds, h)]["DyTimeBase"][0], 3), round(table[(ds, h)][c][0], 3)
-                w, t, l = w + (a < b), t + (a == b), l + (a > b)
-        better = [ds for ds in DATASETS if table[(ds, "Avg")]["DyTimeBase"][0] < table[(ds, "Avg")][c][0]]
-        worse = [ds for ds in DATASETS if ds not in better]
-        rows.append(f"{name(c)} & {w} & {t} & {l} & {', '.join(better) or '--'} & {', '.join(worse) or '--'}" + r"\\")
-    return wrap(head + rows, "lcccll")
+    for c in (SELF + PUB)[1:]:
+        res = [compare(stats[(ds, h)]["DyTimeBase"][0], stats[(ds, h)][c][0]) for ds in DATASETS for h in HORIZONS]
+        avg = {ds: compare(stats[(ds, "Avg")]["DyTimeBase"][0], stats[(ds, "Avg")][c][0]) for ds in DATASETS}
+        lists = [", ".join(ds for ds in DATASETS if avg[ds] == k) or "--" for k in (-1, 0, 1)]
+        rows.append(f"{name(c, cite=c in PUBLISHED)} & {res.count(-1)} & {res.count(0)} & {res.count(1)} & "
+                    + " & ".join(lists) + r"\\")
+    return wrap(head + rows, "lccclll")
 
 
 def versus_table(table):
@@ -127,7 +177,9 @@ def efficiency_table():
     head = [r"Mô hình & Params & MACs & Epoch Time (s) & Infer Time (ms) & So với DyBAS-Net\\",
             r"\midrule"]
     rows = []
-    for n, x in sorted(r.items(), key=lambda kv: kv[1][INFER]):
+    # MS-FLOW, GTR thay DyTimeNet, DLinear như các bảng độ chính xác (số đo vẫn giữ trong results/bench_efficiency.json).
+    for n, x in sorted(((n, x) for n, x in r.items() if n not in ("DyTimeNet (cũ)", "DLinear")),
+                       key=lambda kv: kv[1][INFER]):
         epoch = th(x["epoch_s"]) + (r"$^{\ddagger}$" if "mem_over_gb" in x else "")
         label = r"\textbf{DyBAS-Net}" if n == "DyTimeBase" else SHORT.get(n, n.replace(" (cũ)", ""))
         rows.append(f"{label} & {count(x['params'])} & {count(x['macs'])} & {epoch} & "
@@ -157,26 +209,81 @@ def ablation_table(runs):
 
 
 def hparam_table():
-    head = [r" & \multicolumn{3}{c}{Theo $S=96/192/336/720$} & \multicolumn{3}{c}{Nhánh trộn biến}\\",
-            r"\cmidrule(lr){2-4}\cmidrule(l){5-7}",
-            r"Dataset & $P$ & $R$ & Riêng biến & $D$ & $p_1$ & $p_2$\\", r"\midrule"]
+    head = [r" & \multicolumn{2}{c}{Theo $S=96/192/336/720$} & \multicolumn{2}{c}{Nhánh trộn biến}\\",
+            r"\cmidrule(lr){2-3}\cmidrule(l){4-5}",
+            r"Dataset & $P$ & $R$ & $p_1$ & $p_2$\\", r"\midrule"]   # D = 64 cho mọi dataset; individual chỉ Weather
     rows = []
-    for ds in DATASETS:
+    for ds in list(DATASETS) + list(NEW_LOAD):   # ba bộ mới: run_suite.PR_TUNED (Load không đưa vào slide)
         v = [TB_OFFICIAL[ds][int(h)] for h in HORIZONS]
         j = lambda i: "/".join(f"{x[i]:g}" for x in v)  # noqa: E731
-        d, p1, p2 = BRANCH[ds]
-        rows.append(f"{ds} & {j(3)} & {j(4)} & {'có' if TB_INDIVIDUAL[ds] else 'không'} & {d} & {p1:g} & {p2:g}"
-                    + r"\\")
-    return wrap(head + rows, "lllcccc")
+        _, p1, p2 = BRANCH.get(ds) or (64, *FIX_TUNED[ds])
+        rows.append(f"{ds} & {j(3)} & {j(4)} & {p1:g} & {p2:g}" + r"\\")
+    return wrap(head + rows, "lllcc")
+
+
+# Bộ phụ tải điện thực tế (load_new.csv): mọi mô hình tự chạy, 3 seed, siêu tham số chính thức của ETTh1 (cùng tần
+# số giờ). Pipeline của repo: results/suite_Load_L720*.json, results/fix_Load_L720.json; TSLib và FITS:
+# results/external_Load_L720.json (scripts/run_external.py).
+LOAD_FILES = ["results/suite_Load_L720.json", "results/suite_Load_L720_b.json", "results/fix_Load_L720.json",
+              "results/external_Load_L720.json"]
+LOAD_MODELS = {"DyTimeBase": "dytbase_2stage",   # như compare_all.TUNED
+               "TimeBase*": "timebase_off", "CycleNet/Linear": "cyclenet_off",
+               "CycleNet/MLP": "cyclenet_mlp_off", "TQNet": "tqnet_off", "SparseTSF": "sparsetsf_off", "FITS": "FITS",
+               "DLinear": "DLinear", "iTransformer": "iTransformer"}
+
+
+def load_table():
+    runs = {}
+    for f in LOAD_FILES:
+        runs.update(json.loads(Path(f).read_text(encoding="utf-8")))
+    hs = [int(h) for h in HORIZONS]
+    val = {c: {h: [statistics.mean(runs[f"{v}_S{h}_seed{s}"][m] for s in SEEDS) for m in ("mse", "mae")] for h in hs}
+           for c, v in LOAD_MODELS.items()}
+    for c in val:
+        val[c]["Avg"] = [statistics.mean(val[c][h][i] for h in hs) for i in (0, 1)]
+    cols = hs + ["Avg"]
+    label = {h: f"$S={h}$" for h in hs} | {"Avg": "Trung bình"}
+    head = [r"\multirow{2}{*}{Mô hình} & " + " & ".join(rf"\multicolumn{{2}}{{c}}{{{label[h]}}}" for h in cols) + r"\\",
+            "".join(rf"\cmidrule(lr){{{2 + 2 * k}-{3 + 2 * k}}}" for k in range(len(cols))),
+            " & " + " & ".join("MSE & MAE" for _ in cols) + r"\\", r"\midrule"]
+    rows = [f"{name(c)} & " + " & ".join(mark_color([val[k][h][i] for k in val], val[c][h][i]) for h in cols for i in (0, 1))
+            + r"\\" for c in sorted(val, key=lambda c: val[c]["Avg"][0])]   # MSE trung bình tăng dần
+    return wrap(head + rows, "l" + "cc" * len(cols))
+
+
+# Ba bộ phụ tải đa biến công khai (scripts/prepare_load_data.py): cùng tập mô hình như bảng Load, 3 seed; P, R theo
+# run_suite.PR_TUNED, p1/p2 theo run_fix.TUNED.
+NEW_LOAD = ("Tetouan", "Panama")   # PJM: đã chạy (results/*_PJM_L720.json) nhưng không đưa vào slide
+NEW_LOAD_MODELS = {**{c: v for c, v in LOAD_MODELS.items() if c != "DLinear"}, **EXTERNAL,
+                   "PatchTST": "PatchTST", "TimeMixer": "TimeMixer"}   # TSLib, script ETTh1 (scripts/run_tslib_load.sh); TimeMixer/Panama: lr 1e-3 (run_external.RUN_OVERRIDE)
+
+
+def new_load_table():
+    runs = {}
+    for ds in NEW_LOAD:
+        runs[ds] = {}
+        for f in (f"results/suite_{ds}_L720.json", f"results/fix_{ds}_L720.json", f"results/external_{ds}_L720.json"):
+            runs[ds].update(json.loads(Path(f).read_text(encoding="utf-8")))
+    hs = [int(h) for h in HORIZONS]
+    val = {c: {ds: seed_stats(runs[ds], v, hs) for ds in NEW_LOAD} for c, v in NEW_LOAD_MODELS.items()}
+    head = [r"\multirow{2}{*}{Mô hình} & " + " & ".join(rf"\multicolumn{{2}}{{c}}{{{d}}}" for d in NEW_LOAD) + r"\\",
+            "".join(rf"\cmidrule(lr){{{2 + 2 * k}-{3 + 2 * k}}}" for k in range(len(NEW_LOAD))),
+            " & " + " & ".join("MSE & MAE" for _ in NEW_LOAD) + r"\\", r"\midrule"]
+    order = sorted(val, key=lambda c: statistics.mean(val[c][ds][0][0] for ds in NEW_LOAD))   # MSE TB tăng dần
+    rows = [f"{name(c)} & " + " & ".join(mark_std({k: val[k][ds][i] for k in val}, c)
+                                         for ds in NEW_LOAD for i in (0, 1)) + r"\\" for c in order]
+    return wrap(head + rows, "l" + "cc" * len(NEW_LOAD))
 
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     runs, table = load_all()
-    files = {"avg.tex": avg_table(table), "h_etth.tex": horizon_table(table, ["ETTh1", "ETTh2"]),
+    stats = bench_stats(runs, table)
+    files = {"avg.tex": avg_table(stats), "h_etth.tex": horizon_table(table, ["ETTh1", "ETTh2"]),
              "h_ettm.tex": horizon_table(table, ["ETTm1", "ETTm2"]), "h_weather.tex": horizon_table(table, ["Weather"]),
-             "h2h.tex": h2h_table(table), "versus.tex": versus_table(table), "efficiency.tex": efficiency_table(),
-             "ablation.tex": ablation_table(runs), "hparams.tex": hparam_table()}
+             "h2h.tex": h2h_table(stats), "versus.tex": versus_table(table), "efficiency.tex": efficiency_table(),
+             "ablation.tex": ablation_table(runs), "hparams.tex": hparam_table(), "load.tex": load_table(),
+             "new_load.tex": new_load_table()}
     for n, text in files.items():
         (OUT / n).write_text(text, encoding="utf-8")
     print("wrote", ", ".join(files))

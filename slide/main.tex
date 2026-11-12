@@ -7,6 +7,8 @@
 \usepackage{csquotes}
 \usepackage{amsmath, amssymb, amsthm}
 \usepackage{bm}
+\usepackage{xr}
+\externaldocument[P-]{../paper/DyBAS-Net}   % số công thức trùng với paper
 \usepackage{tikz}
 \usetheme{Madrid}
 
@@ -60,7 +62,8 @@
 
 % TITLE, AUTHORS, INSTITUTE, DATE
 
-\title[Đồ án 1]{\textbf{Kết hợp học quan hệ động giữa các biến và dự báo theo đoạn dựa trên thành phần cơ sở cho chuỗi thời gian đa biến}}
+\title[Đồ án 1]{\textbf{Dynamic Dependency Learning and Sparse Segment-Based Pattern Extraction for Multivariate Time Series Load
+Forecasting}}
 \author[Sinh viên thực hiện: Nguyễn Hải Long]{
 \begin{tabular}{ll}
     \textbf{Giảng viên hướng dẫn:} & \color{mqred}{\textbf{PGS. TS. Nguyễn Thị Ngọc Anh}} \\
@@ -95,20 +98,30 @@
 \section{Tổng quan vấn đề nghiên cứu và mục đích nghiên cứu}
 \subsection{Tổng quan vấn đề nghiên cứu}
 
-\begin{frame}{Bài toán dự báo dài hạn chuỗi thời gian đa biến}
+\begin{frame}{Bài toán dự báo phụ tải chuỗi thời gian đa biến}
+\small
 \begin{itemize}
     \item \textbf{Bài toán:} từ $L$ bước quá khứ của $C$ biến, dự báo đồng thời $S$ bước tương lai của cả $C$ biến
           (năng lượng, thời tiết, giao thông\dots).
 
-    \vspace{0.15cm}
+    \vspace{0.1cm}
+    \item \textbf{Vai trò:} dự báo phụ tải được xem là năng lực nền tảng cho quy hoạch và vận hành hệ thống
+          điện\refnote{Hong2016Probabilistic}.
+
+    \vspace{0.1cm}
+    \item \textbf{Thách thức đa biến:} nắm phụ thuộc giữa các kênh và xử lý dịch chuyển phân phối ngày càng khó khi quy mô
+          và lĩnh vực ứng dụng mở rộng\refnote{Kim2025Survey}.
+
+    \vspace{0.1cm}
     \item \textbf{Xu hướng hiện nay:} dùng cửa sổ quá khứ rất dài ($L = 720$) để nắm phụ thuộc dài hạn, kéo theo số
           tham số và khối lượng tính toán tăng mạnh\refnote{Huang2025TimeBase}.
 
-    \vspace{0.15cm}
-    \item \textbf{Hai yêu cầu cần đáp ứng cùng lúc:}
+    \vspace{0.1cm}
+    \item \textbf{Ba yêu cầu cần đáp ứng cùng lúc:}
     \begin{itemize}
         \item \emph{Nhẹ và nhanh}, để triển khai được trên thiết bị hạn chế tài nguyên.
-        \item \emph{Khai thác quan hệ giữa các biến}, vì các biến trong hệ thống thực ảnh hưởng lẫn nhau.
+        \item \emph{Khai thác mẫu hình chu kỳ} của chuỗi.
+        \item \emph{Học quan hệ giữa các biến} mà không khuếch đại các phụ thuộc giả.
     \end{itemize}
 \end{itemize}
 \end{frame}
@@ -118,35 +131,141 @@
     \item \textbf{Tương đồng theo chu kỳ:} các đoạn dài một chu kỳ (ví dụ mỗi ngày) có hình dạng rất giống nhau, với hệ số
           tương quan Pearson giữa các đoạn cao\refnote{Huang2025TimeBase}.
 
-    \vspace{0.15cm}
+    \vspace{0.1cm}
+    \item \textbf{Phụ thuộc theo chu kỳ toàn cục:} tương quan giữa một đoạn và đoạn tương ứng ở xa trong chu kỳ toàn cục
+          thường cao hơn tương quan với các đoạn liền kề\refnote{Cao2026GTR}; dữ liệu điện có mẫu hình ngày dùng chung cho
+          mọi ngày\refnote{Lin2024CycleNet}.
+
+    \vspace{0.1cm}
     \item \textbf{Hệ quả:} không nhất thiết phải mô hình hóa từng điểm thời gian. TimeBase chỉ dùng
           \textbf{0.39K tham số}, ít hơn DLinear hơn $2.6\times10^{3}$ lần về tham số và 120 lần về MACs, mà vẫn đạt độ chính
           xác cạnh tranh.
 \end{itemize}
 
-\vspace{0.2cm}
+\vspace{0.1cm}
 \begin{block}{}
 \centering Dự báo trên \textbf{một vài ``đoạn đại diện''} thay vì trên $L$ điểm thời gian.
 \end{block}
 \end{frame}
 
 \begin{frame}{Đặc điểm 2: Phụ thuộc chéo giữa các biến}
+\footnotesize
 \begin{itemize}
-    \item Các phương pháp chia làm hai nhóm theo cách xử lý biến\refnote{Han2024Capacity}:
-    \begin{itemize}
-        \item \textbf{Độc lập biến (CI)} (PatchTST, DLinear, TimeBase): mỗi biến dự báo riêng, bỏ qua các quan hệ hiệp
-              biến quan trọng.
-        \item \textbf{Phụ thuộc biến (CD)} (iTransformer, DyTimeNet): học mọi phụ thuộc mà không phân biệt, đưa thêm nhiễu
-              và giảm khả năng khái quát\refnote{Hu2025TimeFilter}.
+    \item \textbf{Hai nhóm phương pháp theo cách xử lý biến}\refnote{Han2024Capacity}:
+    \begin{itemize}\footnotesize
+        \item \textbf{Độc lập biến (CI)} (PatchTST, DLinear, TimeBase): bền vững nhưng bỏ qua tương tác giữa các kênh.
+        \item \textbf{Phụ thuộc biến (CD)} (iTransformer, DyTimeNet): nắm được tương tác nhưng dễ bị nhiễu từ các kênh không
+              liên quan\refnote{Qiu2025DUET}.
     \end{itemize}
 
-    \vspace{0.15cm}
-    \item \textbf{Mức phụ thuộc khác nhau theo miền dữ liệu:} biến khí hậu có ràng buộc vật lý tự nhiên với nhau, còn mức
-          tiêu thụ điện của từng hộ gần như độc lập.
+    \item \textbf{Phụ thuộc thay đổi theo trạng thái:} cùng một cặp biến có thể liên kết mạnh ở kịch bản này nhưng yếu ở
+          kịch bản khác; nhiễu cục bộ tạo ra tương quan giả\refnote{Zhang2026MSFLOW}.
 
-    \vspace{0.15cm}
-    \item \textbf{Phụ thuộc chéo thay đổi theo thời gian và thưa:} DyTimeNet dùng chiến lược thưa \emph{DropFusion} để
-          giảm thông tin dư thừa khi học quan hệ liên biến\refnote{Chen2026DyTimeNet}.
+    \item \textbf{Mẫu khác toàn cục:} tương quan đo trên từng mẫu có thể lệch đáng kể so với tương quan toàn cục của tập
+          huấn luyện\refnote{Lin2025TQNet}.
+
+    \item \textbf{Phụ thuộc thưa:} DyTimeNet dùng chiến lược thưa \emph{DropFusion} để giảm thông tin dư thừa khi học quan
+          hệ liên biến\refnote{Chen2026DyTimeNet}.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Minh chứng trên dữ liệu phụ tải Hà Nội}
+\centering
+\includegraphics[width=\textwidth,height=0.93\textheight,keepaspectratio]{intro_load.pdf}
+\end{frame}
+
+\begin{frame}{Related works: Sparse segment}
+\footnotesize
+\begin{itemize}
+    \item \textbf{Công trình tiêu biểu:} PatchTST chia mỗi chuỗi đơn biến thành các patch làm token cho
+          Transformer\refnote{Nie2023PatchTST}; TimesNet biến chuỗi 1D thành tensor 2D theo các chu kỳ để nắm biến thiên trong
+          và giữa các chu kỳ\refnote{Wu2023TimesNet}; SparseTSF dự báo tuyến tính giữa các chu
+          kỳ\refnote{Lin2024SparseTSF}; TimeBase dự báo trên một số ít đoạn cơ sở\refnote{Huang2025TimeBase}.
+    \item \textbf{So sánh, ưu điểm:} PatchTST dùng patch độ dài cố định, TimesNet tổ chức chuỗi theo chu kỳ của dữ liệu;
+          token mức đoạn bền vững hơn với nhiễu cục bộ và rút ngắn chuỗi cần xử lý.
+    \item \textbf{Nhược điểm:} đoạn được đưa vào backbone sâu nên mô hình vẫn phức tạp; SparseTSF, TimeBase rất nhẹ nhưng xử lý
+          từng biến độc lập.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Related works: Multivariate time series}
+\small
+\begin{itemize}
+    \item \textbf{Công trình tiêu biểu:} Informer cải thiện hiệu quả attention trên chuỗi dài\refnote{Zhou2021Informer};
+          FEDformer tích hợp phân rã với cấu trúc miền tần số\refnote{Zhou2022FEDformer}; JTFT kết hợp miền thời gian và
+          miền tần số, dùng attention hạng thấp để nắm phụ thuộc giữa các chiều\refnote{Chen2024JTFT}.
+    \item \textbf{So sánh:} khác nhau ở cách biểu diễn tín hiệu (điểm, token tần số, thời gian--tần số), nhưng cùng dựa
+          trên mạng sâu.
+    \item \textbf{Ưu điểm:} biểu diễn mạnh đối với động học phức tạp, phi tuyến.
+    \item \textbf{Nhược điểm}: chi phí backbone sâu lớn hơn nhiều so với ánh xạ tuyến tính; quan
+          hệ liên biến được học lẫn trong backbone thay vì qua một cơ chế thưa, tường minh.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Related works: Load forecasting}
+\small
+\begin{itemize}
+    \item \textbf{Mô hình thống kê:} ARIMA đa mùa vụ thích nghi dự báo phụ tải nước nóng sinh hoạt\refnote{Nagpal2025ARIMA};
+          SARIMA kết hợp phân tích phổ dự báo nhu cầu điện đỉnh theo mùa\refnote{MelchorCruz2025Spectral}; các cách cổ
+          điển (Fourier, làm trơn mũ, SARIMA) chưa phản ánh đặc trưng riêng và tương tác giữa các chu kỳ mùa
+          vụ\refnote{Moon2022MixedPooling}.
+    \item \textbf{Mô hình học sâu:} DeepAR học một mô hình tự hồi quy toàn cục trên nhiều chuỗi liên quan và đưa ra phân
+          phối dự báo\refnote{Salinas2020DeepAR}; TFT kết hợp chọn biến với attention có thể diễn giải cho dự báo đa
+          tầm\refnote{Lim2021TFT}.
+    \item \textbf{So sánh:} mô hình thống kê minh bạch, rẻ nhưng dựa trên giả định tuyến tính và thường xử lý các thành phần
+          mùa vụ riêng rẽ; mô hình sâu nắm được tính phi tuyến nhưng nặng và không mô hình hóa tường minh việc biến nào ảnh
+          hưởng biến nào.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Related works: Dynamic dependency (1/2)}
+\small
+\textbf{Công trình tiêu biểu:}
+\begin{itemize}
+    \item \textbf{MS-FLOW:} gộp token patch thành trạng thái mức biến, chỉ giữ Top-$K$ cạnh cho mỗi biến trong đồ thị thích
+          nghi theo mẫu, rồi lan truyền thông tin dọc các cạnh này\refnote{Zhang2026MSFLOW}.
+    \item \textbf{xCPD:} mỗi cặp kênh--patch là một nút đồ thị, chia thành dải tần thấp/trung/cao, định tuyến tới các
+          chuyên gia theo tần số\refnote{Li2026xCPD}.
+    \item \textbf{DUET:} phân cụm mềm các kênh trong miền tần số bằng metric Mahalanobis học được và mặt nạ lấy mẫu
+          Bernoulli, hợp nhất qua masked attention\refnote{Qiu2025DUET}.
+    \item \textbf{TQNet:} query học được dịch theo chu kỳ, key/value từ đầu vào gốc, chỉ một lớp attention kết hợp tương
+          quan toàn cục và tương quan mức mẫu\refnote{Lin2025TQNet}.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Related works: Dynamic dependency (2/2)}
+\small
+\begin{itemize}
+    \item \textbf{Ưu điểm:} mô hình hóa phụ thuộc bền vững; TQNet và xCPD còn chú trọng hiệu quả.
+    \item \textbf{Nhược điểm:} học trên token mức patch/điểm nên tăng theo $C$: DUET dùng ma trận $C\times C$ giữa mọi cặp
+          kênh, xCPD dựng đồ thị $C\times N$ nút; MS-FLOW phải chọn $K$ theo từng bộ dữ liệu; TQNet: ép mô hình hóa đa biến
+          có thể gây hại khi tương quan yếu.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Related works: Pattern extraction (1/2)}
+\small
+\textbf{Công trình tiêu biểu:}
+\begin{itemize}
+    \item \textbf{CycleNet:} học các chu kỳ lặp $Q\in\R^{W\times C}$ dùng chung cho cả bộ dữ liệu, loại khỏi đầu vào và chỉ
+          dự báo phần dư; chỉ thêm $W\times C$ tham số, không thêm MACs\refnote{Lin2024CycleNet}.
+    \item \textbf{TimeEmb:} tách thành phần bất biến (truy xuất từ ngân hàng embedding theo dấu thời gian) khỏi thành phần
+          biến đổi (xử lý bằng bộ lọc tần số)\refnote{Xia2025TimeEmb}.
+    \item \textbf{GTR:} embedding toàn cục cho cả một chu kỳ, truy xuất đoạn theo vị trí tuyệt đối, hợp nhất bằng tích chập
+          2D; mô-đun chỉ 40.1K tham số\refnote{Cao2026GTR}.
+    \item \textbf{LightGTS:} patch dài đúng một chu kỳ nội tại, giải mã song song; nhỏ hơn 10--100 lần các mô hình nền tảng
+          khác\refnote{Wang2025LightGTS}.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Related works: Pattern extraction (2/2)}
+\small
+\begin{itemize}
+    \item \textbf{So sánh:} CycleNet, TimeEmb, GTR lưu mẫu hình \emph{toàn cục} học trên cả tập huấn luyện; LightGTS trích
+          mẫu hình \emph{cục bộ} căn theo chu kỳ từ cửa sổ đầu vào.
+    \item \textbf{Ưu điểm:} nắm cấu trúc chu kỳ với chi phí thấp.
+    \item \textbf{Nhược điểm:} mẫu hình được trích xuất theo từng kênh. CycleNet thua iTransformer trên Traffic và nêu mô
+          hình hóa liên kênh là hướng phát triển tương lai\refnote{Lin2024CycleNet}.
 \end{itemize}
 \end{frame}
 
@@ -154,45 +273,45 @@
 \small
 \begin{center}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}llcc@{}}
+\begin{tabular}{@{}llccc@{}}
 \toprule
-Nhóm mô hình & Ví dụ & Rất nhẹ & Học quan hệ liên biến\\
+Nhóm mô hình & Ví dụ & Biểu diễn chu kỳ / đoạn & Học quan hệ liên biến & Rất nhẹ\\
 \midrule
-Tuyến tính theo đoạn / tần số, CI & TimeBase, SparseTSF, FITS & \textcolor{ForestGreen}{\checkmark} & \textcolor{mqred}{$\times$}\\
-Transformer & PatchTST (CI), iTransformer (CD) & \textcolor{mqred}{$\times$} & một phần\\
-Đồ thị, lọc phụ thuộc theo patch & TimeFilter & \textcolor{mqred}{$\times$} & \textcolor{ForestGreen}{\checkmark}\\
-MLP trộn biến trên chuỗi gốc (chi phí theo $L$, $S$) & DyTimeNet & \textcolor{mqred}{$\times$} & \textcolor{ForestGreen}{\checkmark}\\
+Đoạn thưa, tuyến tính (CI) & SparseTSF, TimeBase & \textcolor{ForestGreen}{\checkmark} & \textcolor{mqred}{$\times$} & \textcolor{ForestGreen}{\checkmark}\\
+Mô hình sâu theo đoạn & PatchTST, TimesNet & \textcolor{ForestGreen}{\checkmark} & \textcolor{mqred}{$\times$} / ngầm định & \textcolor{mqred}{$\times$}\\
+Mô hình sâu đa biến & Informer, FEDformer, JTFT, iTransformer & \textcolor{mqred}{$\times$} & \textcolor{ForestGreen}{\checkmark} dày đặc / hạng thấp & \textcolor{mqred}{$\times$}\\
+Mô hình phụ tải thống kê & ARIMA đa mùa vụ, phân tích phổ & \textcolor{ForestGreen}{\checkmark} & \textcolor{mqred}{$\times$} & \textcolor{ForestGreen}{\checkmark}\\
+Mô hình phụ tải học sâu & DeepAR, TFT & \textcolor{mqred}{$\times$} & chỉ qua biến đồng hành & \textcolor{mqred}{$\times$}\\
+Trích xuất mẫu hình (CI) & CycleNet, TimeEmb, GTR, LightGTS & \textcolor{ForestGreen}{\checkmark} & \textcolor{mqred}{$\times$} & \textcolor{ForestGreen}{\checkmark}\\
+Phụ thuộc thưa / thích nghi & MS-FLOW, xCPD, DUET & patch & \textcolor{ForestGreen}{\checkmark} thưa & một phần\\
+Attention với query chu kỳ & TQNet & \textcolor{ForestGreen}{\checkmark} & \textcolor{ForestGreen}{\checkmark} & một phần\\
+MLP trộn biến trên chuỗi gốc (chi phí theo $L$, $S$) & DyTimeNet & \textcolor{mqred}{$\times$} & \textcolor{ForestGreen}{\checkmark} thưa & \textcolor{mqred}{$\times$}\\
+\midrule
+\textbf{DyBAS-Net (đề xuất)} & -- & \textcolor{ForestGreen}{\checkmark} đoạn cơ sở & \textcolor{ForestGreen}{\checkmark} thưa, động & \textcolor{ForestGreen}{\checkmark}\\
 \bottomrule
 \end{tabular}}
 \end{center}
 
-\begin{itemize}
-    \item \refnote{Huang2025TimeBase}TimeBase giả định các biến \emph{đồng nhất} nên dùng chiến lược độc lập biến.
-    \item \refnote{Hu2025TimeFilter}TimeFilter dựng đồ thị trên $n = C\times N$ nút (biến, patch); ma trận khoảng cách có kích thước
-          $n\times n$.
-\end{itemize}
-
-\begin{alertblock}{Khoảng trống}
-Chưa có mô hình vừa giữ chi phí siêu nhẹ của dự báo theo đoạn, vừa học được phụ thuộc chéo giữa các biến.
-\end{alertblock}
 \end{frame}
 
 \subsection{Mục đích nghiên cứu}
 
 \begin{frame}{Mục đích nghiên cứu}
-Đề xuất mô hình \textbf{DyBAS-Net} (\textbf{Dy}namic cross-variable dependency on \textbf{BAS}is components), kết hợp hai
-hướng tiếp cận:
-
-\vspace{0.15cm}
+\small
+Đề xuất mô hình \textbf{DyBAS-Net} (\textbf{Dy}namic cross-variable dependency on \textbf{BAS}is components), với các mục
+tiêu:
 \begin{itemize}
-    \item \textbf{Dự báo theo đoạn:} phân đoạn theo chu kỳ, trích xuất $R$ thành phần cơ sở và dự báo theo
-          đoạn, kế thừa từ TimeBase\refnote{Huang2025TimeBase}.
+    \item \textbf{Trích xuất mẫu hình dựa trên đoạn thưa:} phân đoạn theo chu kỳ, chuẩn hóa từng pha, nén $N$ đoạn quá khứ
+          thành $R\ll N$ đoạn cơ sở trực giao.
 
-    \item \textbf{Học phụ thuộc chéo trong không gian cơ sở:} đưa CrossVBlock với chiến lược DropFusion và IntraVBlock của
+    \item \textbf{Học phụ thuộc động trong không gian cơ sở:} đưa CrossVBlock với chiến lược DropFusion và IntraVBlock của
           DyTimeNet\refnote{Chen2026DyTimeNet} vào xử lý $P\cdot R$ hệ số cơ sở của mỗi biến, thay vì $L$ điểm thời gian.
 
-    \item \textbf{Hiệu chỉnh có kiểm soát:} nhánh trộn biến chỉ cộng một lượng hiệu chỉnh vào các thành phần cơ sở, được
-          khởi tạo bằng 0.
+    \item \textbf{Hiệu chỉnh an toàn:} nhánh trộn biến chỉ cộng một lượng hiệu chỉnh vào các thành phần cơ sở, khởi tạo bằng
+          0, nên mô hình xuất phát đúng từ backbone CI.
+
+    \item \textbf{Hiệu quả:} phép tính trên trục thời gian chỉ ở kích thước mức đoạn ($N$, $R$, $P$, cỡ hàng chục) thay vì
+          $L$, $S$ (cỡ hàng trăm).
 
     \item \textbf{Đánh giá toàn diện:} so sánh độ chính xác với 14 mô hình trên 5 bộ dữ liệu, và đo chi phí tính toán của
           các mô hình trên \emph{cùng một thiết bị}.
@@ -205,26 +324,25 @@ hướng tiếp cận:
 
 \begin{frame}{Input}
     \small
-    \textbf{Dữ liệu tập train $\mathcal{X}_{train} \in \mathbb{R}^{L \times C}$:} Chuỗi lịch sử độ dài $L$ của $C$ biến
-    $X^{(i)}$ với $i = \overline{1, C}$.
+    \textbf{Đầu vào $\mathcal{X} \in \mathbb{R}^{L \times C}$:} một cửa sổ quá khứ độ dài $L$ của $C$ biến,
+    $i = \overline{1, C}$ (cửa sổ được trượt trên cả tập train, val và test).
 
     \begin{columns}[c]
         \begin{column}{0.52\textwidth}
             \[
-            \mathcal{X}_{train} =
+            \mathcal{X} =
             \begin{bmatrix}
             x_1^{(1)} & x_1^{(2)} & \dots & x_1^{(C)} \\
             x_2^{(1)} & x_2^{(2)} & \dots & x_2^{(C)} \\
             \vdots & \vdots & \ddots & \vdots \\
             x_L^{(1)} & x_L^{(2)} & \dots & x_L^{(C)}
-            \end{bmatrix}
-            \]
+            \end{bmatrix} \tag{\ref*{P-eq:input}}\]
         \end{column}
         \begin{column}{0.45\textwidth}
             \textbf{Định nghĩa thành phần:}
             \begin{itemize}
                 \setlength{\itemsep}{2pt}
-                \item $x_t^{(i)}$: Giá trị của biến $X^{(i)}$ tại thời điểm $t$.
+                \item $x_t^{(i)}$: Giá trị của biến thứ $i$ tại thời điểm $t$.
                 \item $i = \overline{1, C}$: Chỉ số biến.
                 \item $t = \overline{1, L}$: Chỉ số mốc thời gian.
             \end{itemize}
@@ -232,28 +350,27 @@ hướng tiếp cận:
     \end{columns}
 
     \vspace{0.1cm}
-    \textbf{Dữ liệu tập test $\mathcal{X}_{test} \in \mathbb{R}^{S \times C}$:} Giá trị thực tế trong $S$ bước tiếp theo:
+    \textbf{Giá trị thực $\mathcal{Y} \in \mathbb{R}^{S \times C}$:} giá trị của $S$ bước ngay sau cửa sổ:
     \[
-    \mathcal{X}_{test} =
+    \mathcal{Y} =
     \begin{bmatrix}
     x_{L+1}^{(1)} & x_{L+1}^{(2)} & \dots & x_{L+1}^{(C)} \\
     \vdots & \vdots & \ddots & \vdots \\
     x_{L+S}^{(1)} & x_{L+S}^{(2)} & \dots & x_{L+S}^{(C)}
-    \end{bmatrix}
-    \]
+    \end{bmatrix} \tag{\ref*{P-eq:label}}\]
 \end{frame}
 
 \begin{frame}{Output và Hàm mục tiêu}
     \begin{itemize}
-        \item \textbf{Ma trận kết quả dự báo ($\hat{\mathcal{X}} \in \mathbb{R}^{S \times C}$):} được ước lượng đồng thời
+        \item \textbf{Ma trận kết quả dự báo ($\hat{\mathcal{Y}} \in \mathbb{R}^{S \times C}$):} được ước lượng đồng thời
               bởi mô hình $\mathcal{F}$ (\textbf{DyBAS-Net}):
-        $$\hat{\mathcal{X}} = \mathcal{F}(\mathcal{X}_{train})$$
+        $$\hat{\mathcal{Y}} = \mathcal{F}(\mathcal{X})$$
 
         \item \textbf{Sai số dự báo (MSE):}
-        $$ \mathcal{L}_{MSE} = \frac{1}{S \times C} \sum_{t=1}^{S} \sum_{i=1}^{C} \left( x_{L+t}^{(i)} - \hat{x}_{L+t}^{(i)} \right)^2$$
+        \[ \mathcal{L}_{MSE} = \frac{1}{S \times C} \sum_{t=1}^{S} \sum_{i=1}^{C} \left( x_{L+t}^{(i)} - \hat{x}_{L+t}^{(i)} \right)^2 \tag{\ref*{P-eq:mse}}\]
 
         \item \textbf{Hàm mục tiêu khi huấn luyện:} thêm ràng buộc trực giao trên các thành phần cơ sở:
-        $$\mathcal{L} = \mathcal{L}_{MSE} + \lambda_{orth}\,\mathcal{L}_{orth}, \qquad \lambda_{orth}\ge 0$$
+        \[\mathcal{L} = \mathcal{L}_{MSE} + \lambda_{orth}\,\mathcal{L}_{orth}, \qquad \lambda_{orth}\ge 0 \tag{\ref*{P-eq:objective}}\]
     \end{itemize}
 \end{frame}
 
@@ -285,14 +402,15 @@ Ký hiệu & Ý nghĩa & Ví dụ\\
 \midrule
 Chữ thường, không đậm: $x$ & Một số (vô hướng) & $x^{(i)}_t$: giá trị của biến $i$ tại thời điểm $t$\\
 Chữ thường, in đậm: $\mathbf{x}$ & Một vector cột & $\mathbf{x}^{(i)}$: cả chuỗi của biến $i$\\
-Chữ hoa, in đậm: $\mathbf{X}$ & Một ma trận & $\mathbf{X}^{(i)}\in\R^{P\times N}$: ma trận đoạn của biến $i$\\
-Chữ hoa nghiêng: $\mathcal{X}$ & Ma trận chứa \emph{mọi} biến & $\mathcal{X}_{enc}\in\R^{D\times C}$\\
+Chữ hoa, in đậm: $\mathbf{X}$ & Ma trận (của một biến, trọng số, trung gian) & $\mathbf{X}^{(i)}\in\R^{P\times N}$: ma trận đoạn của biến $i$\\
+Chữ hoa nghiêng: $\mathcal{X}$ & Dữ liệu, đặc trưng ẩn của \emph{mọi} biến & $\mathcal{X}$, $\mathcal{Y}$, $\mathcal{X}_{enc}\in\R^{D\times C}$\\
+\quad Ngoại lệ & $\mathcal{M}$: mặt nạ; $\mathcal{L}$: hàm mất mát & $\mathcal{M}_1$, $\mathcal{L}_{MSE}$\\
 \midrule
 Chỉ số trên $^{(i)}$ & Thuộc biến thứ $i$ & $\mathbf{E}^{(i)}$: cơ sở của biến $i$\\
 Ngoặc vuông $[\,\cdot\,]_{p,n}$ & Phần tử hàng $p$, cột $n$ của ma trận & $\big[\mathbf{X}^{(i)}\big]_{p,n}$\\
 Chỉ số dưới của vector in đậm & Cột thứ mấy của ma trận & $\mathbf{e}^{(i)}_r$: cột thứ $r$ của $\mathbf{E}^{(i)}$\\
 Chỉ số dưới $_b$ của ma trận & Mẫu thứ $b$ trong một lô & $\mathbf{G}^{(i)}_b$: ma trận Gram của mẫu $b$\\
-Dấu ngã, mũ, phẩy: $\tilde{\mathbf{X}}$, $\hat{\mathbf{Y}}$, $\mathbf{E}'$ & Đã chuẩn hóa / dự báo / đã hiệu chỉnh & \\
+Dấu ngã, mũ, phẩy: $\tilde{\mathbf{X}}$, $\hat{\mathbf{Y}}$, $\mathbf{E}'$ & Đã chuẩn hóa / dự báo / đã hiệu chỉnh & $\tilde{\mathcal{X}}_{enc}=\operatorname{LN}(\mathcal{X}_{enc})$\\
 \bottomrule
 \end{tabular}}
 \end{center}
@@ -331,8 +449,7 @@ x^{(i)}_2 & x^{(i)}_{P+2} & \dots & x^{(i)}_{(N-1)P+2}\\
 \vdots & \vdots & \ddots & \vdots\\
 x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \end{bmatrix},
-\qquad \big[\mathbf{X}^{(i)}\big]_{p,n} = x^{(i)}_{(n-1)P+p}
-\]
+\qquad \big[\mathbf{X}^{(i)}\big]_{p,n} = x^{(i)}_{(n-1)P+p} \tag{\ref*{P-eq:segment}}\]
 \begin{itemize}
     \item Ví dụ ETTh1: $L=720$, $P=24$ $\Rightarrow$ $N=30$ cột, mỗi cột là một ngày.
     \item $\big[\mathbf{X}^{(i)}\big]_{p,n}$: phần tử ở hàng $p$, cột $n$ là giá trị ở giờ thứ $p$ của ngày thứ $n$.
@@ -345,14 +462,14 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \begin{frame}{2. Chuẩn hóa theo pha}
 \begin{itemize}
     \item \textbf{Trung bình theo pha:} trung bình của từng hàng (từng pha) qua $N$ đoạn:
-    $$\mu^{(i)}_p = \frac{1}{N}\sum_{n=1}^{N}\big[\mathbf{X}^{(i)}\big]_{p,n},
-      \qquad \bm{\mu}^{(i)} = (\mu^{(i)}_1,\dots,\mu^{(i)}_P)^{\top}\in\R^{P}$$
+    \[\mu^{(i)}_p = \frac{1}{N}\sum_{n=1}^{N}\big[\mathbf{X}^{(i)}\big]_{p,n},
+      \qquad \bm{\mu}^{(i)} = (\mu^{(i)}_1,\dots,\mu^{(i)}_P)^{\top}\in\R^{P} \tag{\ref*{P-eq:phase-mean}}\]
 
     \item \textbf{Trừ trung bình:}
-    $$\big[\tilde{\mathbf{X}}^{(i)}\big]_{p,n} = \big[\mathbf{X}^{(i)}\big]_{p,n} - \mu^{(i)}_p
-      \qquad (\text{trừ } \mu^{(i)}_p \text{ cho mọi phần tử của hàng } p)$$
+    \[\big[\tilde{\mathbf{X}}^{(i)}\big]_{p,n} = \big[\mathbf{X}^{(i)}\big]_{p,n} - \mu^{(i)}_p
+      \qquad (\text{trừ } \mu^{(i)}_p \text{ cho mọi phần tử của hàng } p) \tag{\ref*{P-eq:period-norm}}\]
 
-    \item \textbf{Ý nghĩa:} $\bm{\mu}^{(i)}$ là ``đoạn trung bình'' của biến $i$ (ví dụ ban ngày phụ tải cao hơn ban đêm).
+    \item \textbf{Ý nghĩa:} $\bm{\mu}^{(i)}$ là ``đoạn trung bình'' của biến $i$.
           Các bước sau chỉ học phần dao động quanh nó.
 \end{itemize}
 \end{frame}
@@ -361,13 +478,13 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \begin{itemize}
     \item Ánh xạ tuyến tính \textbf{dùng chung cho mọi biến} nén $N$ đoạn thành $R$ thành phần cơ sở
           ($\mathbf{W}_B\in\R^{N\times R}$, $\mathbf{b}_B\in\R^{R}$ học được):
-    $$\mathbf{E}^{(i)} = \tilde{\mathbf{X}}^{(i)}\,\mathbf{W}_B + \mathbf{b}_B \quad\in\R^{P\times R}
-      \qquad (\mathbf{b}_B \text{ cộng vào mọi hàng})$$
+    \[\mathbf{E}^{(i)} = \tilde{\mathbf{X}}^{(i)}\,\mathbf{W}_B + \mathbf{b}_B \quad\in\R^{P\times R}
+      \qquad (\mathbf{b}_B \text{ cộng vào mọi hàng}) \tag{\ref*{P-eq:basis}}\]
 
     \item \textbf{Cột thứ $r$ của $\mathbf{E}^{(i)}$} là tổ hợp tuyến tính của $N$ đoạn quá khứ
           $\tilde{\mathbf{x}}^{(i)}_n$, tức một ``đoạn đại diện'':
-    $$\mathbf{e}^{(i)}_r = \sum_{n=1}^{N} [\mathbf{W}_B]_{n,r}\;\tilde{\mathbf{x}}^{(i)}_{n} + [\mathbf{b}_B]_r
-      \quad\in\R^{P}$$
+    \[\mathbf{e}^{(i)}_r = \sum_{n=1}^{N} [\mathbf{W}_B]_{n,r}\;\tilde{\mathbf{x}}^{(i)}_{n} + [\mathbf{b}_B]_r
+      \quad\in\R^{P} \tag{\ref*{P-eq:basis-col}}\]
 
     \item \textbf{Ý nghĩa:} tóm $N=30$ ngày thành $R=6$ ``ngày điển hình'', dựa trên tính hạng thấp của chuỗi
           dài\refnote{Huang2025TimeBase}.
@@ -377,12 +494,12 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \begin{frame}{3. Ràng buộc trực giao trên các thành phần cơ sở}
 \begin{itemize}
     \item \textbf{Ma trận Gram:} tích vô hướng giữa từng cặp thành phần cơ sở
-    $$\mathbf{G}^{(i)} = \mathbf{E}^{(i)\top}\mathbf{E}^{(i)}\in\R^{R\times R},
-      \qquad \big[\mathbf{G}^{(i)}\big]_{r,s} = \langle \mathbf{e}^{(i)}_r,\mathbf{e}^{(i)}_s\rangle$$
+    \[\mathbf{G}^{(i)} = \mathbf{E}^{(i)\top}\mathbf{E}^{(i)}\in\R^{R\times R},
+      \qquad \big[\mathbf{G}^{(i)}\big]_{r,s} = \langle \mathbf{e}^{(i)}_r,\mathbf{e}^{(i)}_s\rangle \tag{\ref*{P-eq:gram}}\]
 
     \item \textbf{Phạt phần ngoài đường chéo} (trung bình trên $B$ mẫu của một lô và $C$ biến):
-    $$\mathcal{L}_{orth} = \frac{1}{B\,C}\sum_{b=1}^{B}\sum_{i=1}^{C}
-      \Big\|\mathbf{G}^{(i)}_b - \operatorname{diag}\big(\mathbf{G}^{(i)}_b\big)\Big\|_F$$
+    \[\mathcal{L}_{orth} = \frac{1}{B\,C}\sum_{b=1}^{B}\sum_{i=1}^{C}
+      \Big\|\mathbf{G}^{(i)}_b - \operatorname{diag}\big(\mathbf{G}^{(i)}_b\big)\Big\|_F \tag{\ref*{P-eq:orth}}\]
 
     \item $\mathcal{L}_{orth}=0$ khi các thành phần cơ sở đôi một trực giao, nên mỗi thành phần mang một kiểu biến thiên
           riêng, không trùng lặp.
@@ -394,12 +511,12 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \begin{frame}{4. Mã hóa hệ số cơ sở (Basis Encoding)}
 \begin{itemize}
     \item \textbf{Làm phẳng:} trải $\mathbf{E}^{(i)}$ theo hàng thành vector, rồi ghép $C$ biến thành ma trận:
-    $$\mathbf{e}^{(i)} = \operatorname{vec}\big(\mathbf{E}^{(i)}\big)\in\R^{PR},
-      \qquad \bar{\mathbf{E}} = \big[\mathbf{e}^{(1)},\dots,\mathbf{e}^{(C)}\big]\in\R^{PR\times C}$$
+    \[\mathbf{e}^{(i)} = \operatorname{vec}\big(\mathbf{E}^{(i)}\big)\in\R^{PR},
+      \qquad \bar{\mathbf{E}} = \big[\mathbf{e}^{(1)},\dots,\mathbf{e}^{(C)}\big]\in\R^{PR\times C} \tag{\ref*{P-eq:flatten}}\]
 
-    \item \textbf{Mã hóa:} chiếu tuyến tính xuống không gian ẩn $D$ chiều:
-    $$\mathcal{X}_{enc} = \mathbf{W}_{enc}^{\top}\,\bar{\mathbf{E}} + \mathbf{b}_{enc} \quad\in\R^{D\times C}
-      \qquad (\mathbf{b}_{enc} \text{ cộng vào mọi cột})$$
+    \item \textbf{Mã hóa:} ánh xạ tuyến tính sang không gian ẩn $D$ chiều:
+    \[\mathcal{X}_{enc} = \mathbf{W}_{enc}^{\top}\,\bar{\mathbf{E}} + \mathbf{b}_{enc} \quad\in\R^{D\times C}
+      \qquad (\mathbf{b}_{enc} \text{ cộng vào mọi cột}) \tag{\ref*{P-eq:embed}}\]
     \begin{itemize}
         \item $\mathbf{W}_{enc}\in\R^{PR\times D}$: ma trận trọng số có thể học; $\mathbf{b}_{enc}\in\R^{D}$: vector độ lệch.
     \end{itemize}
@@ -410,15 +527,15 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \begin{itemize}
     \item \textbf{LayerNorm}\refnote{Ba2016LayerNorm}: chuẩn hóa $D$ đặc trưng của từng biến (cột $\mathbf{h}\in\R^{D}$),
           đưa mọi biến về cùng thang đo trước khi trộn:
-    $$\operatorname{LN}(\mathbf{h}) = \bm{\gamma}\odot\frac{\mathbf{h}-\mu_{\mathbf{h}}}{\sqrt{\sigma^2_{\mathbf{h}}+\varepsilon}}
-      + \bm{\beta}$$
+    \[\operatorname{LN}(\mathbf{h}) = \bm{\gamma}\odot\frac{\mathbf{h}-\mu_{\mathbf{h}}}{\sqrt{\sigma^2_{\mathbf{h}}+\varepsilon}}
+      + \bm{\beta} \tag{\ref*{P-eq:ln-def}}\]
     \begin{itemize}
         \item $\mu_{\mathbf{h}}, \sigma^2_{\mathbf{h}}$: trung bình, phương sai các phần tử của $\mathbf{h}$;
               $\bm{\gamma},\bm{\beta}\in\R^{D}$ học được.
     \end{itemize}
 
     \item \textbf{Hàm kích hoạt GELU}\refnote{Hendrycks2016GELU}:
-    $$\text{GELU}(x) = x \cdot \Phi(x) = \frac{x}{2}\left(1 + \text{erf}\!\left(\frac{x}{\sqrt{2}}\right)\right)$$
+    \[\text{GELU}(x) = x \cdot \Phi(x) = \frac{x}{2}\left(1 + \text{erf}\!\left(\frac{x}{\sqrt{2}}\right)\right) \tag{\ref*{P-eq:gelu}}\]
     \begin{itemize}
         \item $\Phi(x)$: Hàm phân phối tích lũy của $\mathcal{N}(0,1)$;
               $\text{erf}(x) = \frac{2}{\sqrt{\pi}}\int_0^x e^{-t^2}\,dt$.
@@ -429,17 +546,18 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \begin{frame}{5. Khối Liên biến (CrossVBlock)}
 \begin{itemize}
     \item \textbf{Chuẩn hóa:}
-    $$\mathcal{X}'_{enc} = \operatorname{LN}(\mathcal{X}_{enc}) \quad \in \R^{D \times C}$$
+    $$\tilde{\mathcal{X}}_{enc} = \operatorname{LN}(\mathcal{X}_{enc}) \quad \in \R^{D \times C}$$
 
     \item \textbf{MLP nút thắt trên trục biến} $C\to C'\to C$ (khi kiểm thử), với
           $\mathbf{W}_{df,1}\in\R^{C\times C'}$, $\mathbf{W}_{df,2}\in\R^{C'\times C}$ (độ lệch $\mathbf{b}_1$, $\mathbf{b}_2$ cộng vào mọi hàng):
     \begin{align*}
-      \mathbf{H} &= \text{GELU}\big(\mathcal{X}'_{enc}\,\mathbf{W}_{df,1} + \mathbf{b}_{1}\big)
-                    &&\in\R^{D\times C'}\\
-      \mathcal{X}_{cross} &= \mathbf{H}\,\mathbf{W}_{df,2} + \mathbf{b}_{2} &&\in\R^{D\times C}
+      \mathbf{H} &= \text{GELU}\big(\tilde{\mathcal{X}}_{enc}\,\mathbf{W}_{df,1} + \mathbf{b}_{1}\big)
+                    &&\in\R^{D\times C'} \tag{\ref*{P-eq:cross1}}
+    \\
+      \mathcal{X}_{cross} &= \mathbf{H}\,\mathbf{W}_{df,2} + \mathbf{b}_{2} &&\in\R^{D\times C} \tag{\ref*{P-eq:cross2}}
     \end{align*}
 
-    \item \textbf{Vì sao là trộn liên biến:} mỗi \emph{hàng} của $\mathcal{X}'_{enc}$ là một đặc trưng của cả $C$ biến.
+    \item \textbf{Vì sao là trộn liên biến:} mỗi \emph{hàng} của $\tilde{\mathcal{X}}_{enc}$ là một đặc trưng của cả $C$ biến.
           Nhân phải với $\mathbf{W}_{df}$ tạo mỗi biến mới bằng tổ hợp của mọi biến trên từng đặc trưng.
 
     \item Khi huấn luyện, hai lớp tuyến tính này được thay bằng lớp \textbf{DropFusion}\refnote{Chen2026DyTimeNet}.
@@ -448,16 +566,16 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 
 \begin{frame}{5a. DropFusion: Mặt nạ Cạnh $\mathcal{M}_1$ và Mặt nạ Nút $\mathcal{M}_2$}
     Khi huấn luyện, hai lớp tuyến tính của CrossVBlock được can thiệp bởi DropFusion. Xét lớp thứ nhất
-    (đầu vào $\mathcal{X}'_{enc}\in\R^{D\times C}$, trọng số $\mathbf{W}_{df,1}\in\R^{C\times C'}$):
+    (đầu vào $\tilde{\mathcal{X}}_{enc}\in\R^{D\times C}$, trọng số $\mathbf{W}_{df,1}\in\R^{C\times C'}$):
     \vspace{0.15cm}
     \begin{itemize}
         \item \textbf{Giai đoạn 1 -- Mặt nạ Cạnh $\mathcal{M}_1\in\{0,1\}^{C\times C'}$:} mỗi phần tử bằng 0 với xác
-              suất $p_1$, tức tắt liên kết giữa một cặp biến. Lấy mẫu lại ở mỗi lô dữ liệu.
-        $$\mathbf{W}_{masked} = \mathbf{W}_{df,1} \odot \mathcal{M}_1$$
+              suất $p_1$, tức tắt liên kết giữa một biến đầu vào và một nút ẩn. Lấy mẫu lại ở mỗi lô dữ liệu.
+        \[\mathbf{W}_{masked} = \mathbf{W}_{df,1} \odot \mathcal{M}_1 \tag{\ref*{P-eq:wmasked}}\]
 
         \item \textbf{Giai đoạn 2 -- Mặt nạ Nút $\mathcal{M}_2\in\{0,1\}^{D\times C'}$:} mỗi phần tử bằng 0 với xác suất
               $p_2$, tức tắt ngẫu nhiên từng phần tử đầu ra. Lấy mẫu riêng cho từng mẫu.
-        $$\mathbf{Y}_{masked} = \big(\mathcal{X}'_{enc}\,\mathbf{W}_{masked} + \mathbf{b}_1\big) \odot \mathcal{M}_2$$
+        \[\mathbf{Y}_{masked} = \big(\tilde{\mathcal{X}}_{enc}\,\mathbf{W}_{masked} + \mathbf{b}_1\big) \odot \mathcal{M}_2 \tag{\ref*{P-eq:ymasked}}\]
     \end{itemize}
     \small Lớp thứ hai làm tương tự, với đầu vào $\mathbf{H}$ và trọng số $\mathbf{W}_{df,2}$.
 \end{frame}
@@ -471,15 +589,15 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
     \end{itemize}
 
     \begin{alertblock}{Công thức DropFusion hoàn chỉnh (khi huấn luyện)}
-        $$\text{DF}(\mathcal{X}'_{enc}) = \frac{1}{1-p_2}\left[\frac{\mathcal{X}'_{enc}\,(\mathbf{W}_{df,1}\odot\mathcal{M}_1)}{1-p_1}
-          + \mathbf{b}_1\right]\odot\mathcal{M}_2$$
+        \[\text{DF}(\tilde{\mathcal{X}}_{enc}) = \frac{1}{1-p_2}\left[\frac{\tilde{\mathcal{X}}_{enc}\,(\mathbf{W}_{df,1}\odot\mathcal{M}_1)}{1-p_1}
+          + \mathbf{b}_1\right]\odot\mathcal{M}_2 \tag{\ref*{P-eq:dropfusion}}\]
     \end{alertblock}
 
     % \begin{itemize}
     %     \item \textbf{Khi kiểm thử:} $\mathcal{M}_1=\mathcal{M}_2=\one$, không nhân hệ số bù:
-    %           $\text{DF}(\mathcal{X}'_{enc}) = \mathcal{X}'_{enc}\,\mathbf{W}_{df,1} + \mathbf{b}_1$
+    %           $\text{DF}(\tilde{\mathcal{X}}_{enc}) = \tilde{\mathcal{X}}_{enc}\,\mathbf{W}_{df,1} + \mathbf{b}_1$
     %           (đúng bằng lớp tuyến tính ở CrossVBlock).
-    %     \item Lớp thứ hai: thay $\mathcal{X}'_{enc}$ bằng $\mathbf{H}$, $\mathbf{W}_{df,1}$ bằng $\mathbf{W}_{df,2}$,
+    %     \item Lớp thứ hai: thay $\tilde{\mathcal{X}}_{enc}$ bằng $\mathbf{H}$, $\mathbf{W}_{df,1}$ bằng $\mathbf{W}_{df,2}$,
     %           $\mathbf{b}_1$ bằng $\mathbf{b}_2$.
     % \end{itemize}
 \end{frame}
@@ -487,15 +605,15 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \begin{frame}{6. Khối Nội biến (IntraVBlock)}
     \begin{itemize}
         \item \textbf{Kết nối thặng dư:} cộng đặc trưng chéo với đặc trưng đã chuẩn hóa để giữ thông tin gốc của từng biến:
-        $$\mathcal{X}_{intra} = \mathcal{X}_{cross} + \mathcal{X}'_{enc} \quad \in \R^{D \times C}$$
+        \[\mathcal{X}_{intra} = \mathcal{X}_{cross} + \tilde{\mathcal{X}}_{enc} \quad \in \R^{D \times C} \tag{\ref*{P-eq:cross-res}}\]
 
         \item \textbf{Mạng truyền thẳng dùng chung}, áp dụng cho \emph{từng cột} (từng biến) $\mathbf{h}\in\R^{D}$:
-        $$\text{FFN}(\mathbf{h}) = \mathbf{W}_4\,\text{GELU}(\mathbf{W}_3\mathbf{h} + \mathbf{b}_3) + \mathbf{b}_4,
-          \qquad \mathbf{W}_3\in\R^{D_{ff}\times D},\ \mathbf{W}_4\in\R^{D\times D_{ff}}$$
+        \[\text{FFN}(\mathbf{h}) = \mathbf{W}_4\,\text{GELU}(\mathbf{W}_3\mathbf{h} + \mathbf{b}_3) + \mathbf{b}_4,
+          \qquad \mathbf{W}_3\in\R^{D_{ff}\times D},\ \mathbf{W}_4\in\R^{D\times D_{ff}} \tag{\ref*{P-eq:ffn}}\]
 
         \item \textbf{Đầu ra} (LayerNorm phía trước, thặng dư phía sau):
-        $$\hat{\mathcal{X}}_{intra} = \mathcal{X}_{intra} + \text{FFN}\big(\operatorname{LN}(\mathcal{X}_{intra})\big)
-          \quad \in \R^{D \times C}$$
+        \[\hat{\mathcal{X}}_{intra} = \mathcal{X}_{intra} + \text{FFN}\big(\operatorname{LN}(\mathcal{X}_{intra})\big)
+          \quad \in \R^{D \times C} \tag{\ref*{P-eq:intra}}\]
 
     \end{itemize}
 \end{frame}
@@ -503,11 +621,11 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \begin{frame}{7. Chiếu ngược và Hiệu chỉnh thành phần cơ sở}
     \begin{itemize}
         \item \textbf{Chiếu ngược} về không gian cơ sở:
-        $$\Delta\bar{\mathbf{E}} = \mathbf{W}_{out}^{\top}\,\hat{\mathcal{X}}_{intra} + \mathbf{b}_{out}
-          \quad\in\R^{PR\times C}, \qquad \mathbf{W}_{out}\in\R^{D\times PR}$$
+        \[\Delta\bar{\mathbf{E}} = \mathbf{W}_{out}^{\top}\,\hat{\mathcal{X}}_{intra} + \mathbf{b}_{out}
+          \quad\in\R^{PR\times C}, \qquad \mathbf{W}_{out}\in\R^{D\times PR} \tag{\ref*{P-eq:proj}}\]
 
         \item Cột $i$ được xếp lại thành $\Delta\mathbf{E}^{(i)}\in\R^{P\times R}$ và \textbf{cộng vào cơ sở}:
-        $$\mathbf{E}'^{(i)} = \mathbf{E}^{(i)} + \Delta\mathbf{E}^{(i)}$$
+        \[\mathbf{E}'^{(i)} = \mathbf{E}^{(i)} + \Delta\mathbf{E}^{(i)} \tag{\ref*{P-eq:correct}}\]
 
         \item \textbf{Khởi tạo bằng 0:} $\mathbf{W}_{out}=\mathbf{0}$, $\mathbf{b}_{out}=\mathbf{0}$ nên lúc bắt đầu huấn
               luyện $\Delta\mathbf{E}^{(i)}=\mathbf{0}$.
@@ -519,57 +637,38 @@ x^{(i)}_P & x^{(i)}_{2P} & \dots & x^{(i)}_{NP}
 \begin{frame}{8. Dự báo theo đoạn và Khôi phục thang đo}
     \begin{itemize}
         \item \textbf{Dự báo theo đoạn:} ánh xạ tuyến tính dùng chung sinh $N'$ đoạn tương lai từ $R$ cơ sở đã hiệu chỉnh:
-        $$\hat{\mathbf{Y}}^{(i)} = \mathbf{E}'^{(i)}\,\mathbf{W}_F + \mathbf{b}_F \quad\in\R^{P\times N'},
-          \qquad \mathbf{W}_F\in\R^{R\times N'}$$
+        \[\hat{\mathbf{Y}}^{(i)} = \mathbf{E}'^{(i)}\,\mathbf{W}_F + \mathbf{b}_F \quad\in\R^{P\times N'},
+          \qquad \mathbf{W}_F\in\R^{R\times N'} \tag{\ref*{P-eq:forecast}}\]
 
-        \item \textbf{Khôi phục thang đo:} cộng trả trung bình theo pha cho mọi đoạn tương lai:
-        $$\big[\hat{\mathbf{Y}}'^{(i)}\big]_{p,n} = \big[\hat{\mathbf{Y}}^{(i)}\big]_{p,n} + \mu^{(i)}_p$$
+        \item \textbf{Khôi phục thang đo và ghép đoạn:} cộng trả trung bình theo pha cho mọi đoạn tương lai, nối các
+              cột thành chuỗi và giữ $S$ bước đầu:
+        \[\hat{x}^{(i)}_{L+t} = \big[\hat{\mathbf{Y}}^{(i)}\big]_{p,n} + \mu^{(i)}_p,\quad t=(n-1)P+p,\ \ t=\overline{1,S} \tag{\ref*{P-eq:merge}}\]
 
-        \item \textbf{Ghép đoạn:} nối các cột thành chuỗi và giữ $S$ bước đầu:
-        $$\hat{x}^{(i)}_{L+t} = \big[\hat{\mathbf{Y}}'^{(i)}\big]_{p,n},\quad t=(n-1)P+p,\ \ t=\overline{1,S}$$
+        \item Ghép $C$ biến cho dự báo $\hat{\mathcal{Y}}\in\R^{S\times C}$.
     \end{itemize}
 \end{frame}
 
 \begin{frame}{9. Overview Pipeline}
     \centering
-    \includegraphics[width=1\linewidth]{dytimebase_architecture.png}
+    \includegraphics[width=1\linewidth]{dybas_architecture.pdf}
 
 \end{frame}
 
 \begin{frame}{Điều chỉnh và Tối ưu hóa Trọng số}
     \begin{itemize}
-        \item Trọng số được cập nhật ngược hướng gradient của hàm mục tiêu $\mathcal{L}$ (dạng cơ bản; thực tế dùng bộ tối
-              ưu Adam):
-        \[ W_{k+1} = W_k - \alpha \frac{\partial \mathcal{L}}{\partial W_k}, \qquad
-           b_{k+1} = b_k - \alpha \frac{\partial \mathcal{L}}{\partial b_k} \]
+        \item Trọng số được cập nhật ngược hướng gradient của hàm mục tiêu $\mathcal{L}$:
+        \[ \bm{\theta}_{k+1} = \bm{\theta}_k - \alpha\,\frac{\partial \mathcal{L}}{\partial \bm{\theta}_k} \tag{\ref*{P-eq:gd}}\]
+        với $\bm{\theta}$ gồm mọi trọng số $\mathbf{W}$ và độ lệch $\mathbf{b}$, $k$ là bước cập nhật.
 
         \item \textbf{Hai tốc độ học:} $\alpha=\alpha_B$ cho $\mathbf{W}_B,\mathbf{b}_B,\mathbf{W}_F,\mathbf{b}_F$,
               $\alpha=\alpha_M$ cho nhánh trộn biến.
 
-        \item \textbf{Tốc độ học} theo epoch $e$: giữ nguyên 4 epoch đầu, sau đó nhân $0.8$ mỗi epoch:
-        $\alpha^{(e)} = \alpha$ nếu $e\le 4$, \ $\alpha^{(e)} = \alpha\cdot 0.8^{\,e-4}$ nếu $e>4$.
+        \item \textbf{Tốc độ học} theo epoch $\tau$: giữ nguyên 4 epoch đầu, sau đó nhân $0.8$ mỗi epoch:
+        $\alpha^{(\tau)} = \alpha$ nếu $\tau\le 4$, \ $\alpha^{(\tau)} = \alpha\cdot 0.8^{\,\tau-4}$ nếu $\tau>4$ \hfill(\ref*{P-eq:lr})
     \end{itemize}
 \end{frame}
 
-% \begin{frame}{Vì sao DyBAS-Net nhẹ: Độ phức tạp tính toán}
-%     \small
-%     Số phép nhân--cộng (MACs) cho một mẫu:
-%     \begin{itemize}
-%         \item \textbf{Xương sống} (trích xuất cơ sở, dự báo theo đoạn): \
-%         $\text{MACs}_{B} = C\cdot P\cdot R\cdot(N+N')$
-%         \item \textbf{Nhánh trộn biến:}
-%         $$\text{MACs}_{M} = \underbrace{2\,C\,PR\,D}_{\text{mã hóa, chiếu ngược}}
-%           + \underbrace{2\,D\,C\,C'}_{\text{CrossVBlock}} + \underbrace{2\,C\,D\,D_{ff}}_{\text{IntraVBlock}}$$
-%         \item Không có số hạng nào tỉ lệ với $L\cdot S$; nhánh trộn biến không phụ thuộc $L$ và $S$.
-%     \end{itemize}
 
-%     \begin{block}{Ví dụ Electricity: $C=321$, $L=S=720$, $P=24$, $R=6$, $D=64$}
-%     $\text{MACs}_B\approx 2.8$M, $\text{MACs}_M\approx 21.0$M, tổng $\approx 23.8$M. \\
-%     So sánh: DLinear $2CLS\approx 333$M; DyTimeNet $\approx 212$M.
-%     \end{block}
-% \end{frame}
-
-%=====================================================================
 \section{Thực nghiệm và kết quả}
 \subsection{Thiết lập thực nghiệm}
 
@@ -583,13 +682,23 @@ Dataset & Số biến $C$ & Tần suất & Số bước dùng & Chia Train/Val/T
 ETTh1, ETTh2 & 7 & 1 giờ & 14\,400 & 12/4/4 tháng & 7\,825 / 2\,785 / 2\,785\\
 ETTm1, ETTm2 & 7 & 15 phút & 57\,600 & 12/4/4 tháng & 33\,745 / 11\,425 / 11\,425\\
 Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
+% Load & 10 & 1 giờ & 47\,449 & 7 : 1 : 2 & 32\,399 / 4\,649 / 9\,396\\
+Tetouan & 8 & 10 phút & 52\,416 & 7 : 1 : 2 & 35\,876 / 5\,146 / 10\,389\\
+Panama & 13 & 1 giờ & 48\,048 & 7 : 1 : 2 & 32\,818 / 4\,709 / 9\,516\\
+% PJM & 10 & 1 giờ & 45\,336 & 7 : 1 : 2 & 30\,920 / 4\,438 / 8\,973\\
 \bottomrule
 \end{tabular}}
 \end{center}
 
+\footnotesize
 \begin{itemize}
     \item \textbf{ETT}: nhiệt độ dầu và 6 chỉ số phụ tải của máy biến áp điện.
     \item \textbf{Weather}: 21 chỉ số khí tượng (nhiệt độ, độ ẩm, áp suất, gió\dots), có quan hệ vật lý giữa các biến.
+%     \item \textbf{Load}: phụ tải điện Hà Nội do Tổng Công ty Điện lực Việt Nam thu thập, mỗi giờ một lần
+%           (01/01/2020--31/05/2025), kết hợp dữ liệu thời tiết.
+    \item \textbf{Tetouan} (Maroc, năm 2017): phụ tải 3 khu vực, 3 biến thời tiết và 2 biến bức xạ;
+          \textbf{Panama} (01/2015--06/2020): phụ tải quốc gia và thời tiết 3 thành phố.
+%           \textbf{PJM} (06/2013--08/2018): phụ tải 10 vùng của lưới PJM (Mỹ).
     \item \textbf{Tiền xử lý:} chuẩn hóa Z-score theo từng biến (chỉ tính trên tập train); cửa sổ trượt $L=720$,
           $S\in\{96,192,336,720\}$; đánh giá trên \emph{mọi} cửa sổ của tập test.
 \end{itemize}
@@ -598,14 +707,23 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 \begin{frame}{Siêu tham số của DyBAS-Net}
 \begin{center}
 \small
+\begin{minipage}{0.8\textwidth}
 \input{tables/hparams.tex}
+\end{minipage}
 \end{center}
+\scriptsize
+Panama dùng lịch huấn luyện chính thức của ETTh1, Tetouan dùng của Weather. Với Tetouan, Panama:
+$P$, $R$ chọn theo chu kỳ ngày của dữ liệu train (ACF/FFT, phần dư SVD hạng $R$); $p_1$, $p_2$ chọn bằng grid search
+$\{0.1,\dots,0.6\}^2$ theo val loss.
 \end{frame}
 
 \begin{frame}{Chỉ số đánh giá}
 \begin{itemize}
-    \item \textbf{Độ chính xác:} MSE và MAE:
-    $$\text{MSE} = \frac{1}{n}\sum_{i=1}^{n}(y_i-\hat{y}_i)^2, \qquad \text{MAE} = \frac{1}{n}\sum_{i=1}^{n}|y_i-\hat{y}_i|$$
+    \item \textbf{Độ chính xác:} MSE và MAE, lấy trung bình trên $M$ cửa sổ của tập test ($m$: cửa sổ thứ $m$):
+    \begin{align*}
+      \text{MSE} &= \frac{1}{MSC}\sum_{m=1}^{M}\sum_{t=1}^{S}\sum_{i=1}^{C}\big(x^{(i)}_{m,L+t}-\hat{x}^{(i)}_{m,L+t}\big)^2\\
+      \text{MAE} &= \frac{1}{MSC}\sum_{m=1}^{M}\sum_{t=1}^{S}\sum_{i=1}^{C}\big|x^{(i)}_{m,L+t}-\hat{x}^{(i)}_{m,L+t}\big|
+    \end{align*}
 
     \item \textbf{Hiệu năng}, đo theo cấu hình của TimeBase\refnote{Huang2025TimeBase}: Electricity ($C=321$, $L=S=720$):
     \begin{itemize}
@@ -620,28 +738,27 @@ Weather & 21 & 10 phút & 52\,696 & 7 : 1 : 2 & 36\,072 / 5\,174 / 10\,445\\
 \begin{frame}{Kết quả: MSE / MAE trung bình trên 4 độ dài dự báo}
 \scriptsize
 \input{tables/avg.tex}
-\end{frame}
-
-
-\begin{frame}{DyBAS-Net \& Baselines}
-\scriptsize
-Số ô (bộ dữ liệu $\times$ độ dài dự báo, 20 ô) DyBAS-Net có MSE thấp hơn / bằng / cao hơn từng mô hình.
 
 \vspace{0.1cm}
-\input{tables/h2h.tex}
+\tiny
+\textcolor[HTML]{FF0000}{\textbf{Đỏ}}: $\mu$ thấp nhất; \textcolor[HTML]{0000FF}{xanh}: khoảng $[\mu-\sigma,\mu+\sigma]$
+chồng lấn với khoảng của mô hình tốt nhất.
 \end{frame}
 
-\begin{frame}{Nhận xét độ chính xác}
-\begin{itemize}
-    \item \textbf{Hơn hẳn:} iTransformer, TimesNet, FEDformer, Autoformer, Informer (20/20), TimeMixer (19/20) và DLinear
-          (17/20).
-    \item \textbf{Hơn TQNet}\refnote{Lin2025TQNet} (nhẹ, có học quan hệ liên biến): thắng 16/20, tốt hơn trên 4/5 bộ dữ
-          liệu (trừ ETTm2).
-    \item \textbf{Ngang ngửa:} SparseTSF, FITS, PatchTST, CycleNet-L\refnote{Lin2024CycleNet} (thắng trên ETTh1, ETTm1,
-          Weather; thua trên ETTh2, ETTm2).
-    \item \textbf{So với TimeBase (cùng quy trình):} thắng 12/20, hòa 2; tốt hơn trên ETTh1, ETTh2, ETTm1, kém hơn trên
-          ETTm2, Weather.
-\end{itemize}
+
+
+\begin{frame}{Kết quả trên hai bộ dữ liệu phụ tải đa biến công khai}
+\scriptsize
+Tetouan ($C=8$, 10 phút, $P=144$, $R=3$) và Panama ($C=13$, theo giờ, $P=24$, $R=6$); $L=720$. Mọi mô hình tự chạy trong cùng quy trình: $\mu\pm\sigma$ qua 3 seed của MSE/MAE trung bình 4 horizon
+$S\in\{96,192,336,720\}$. \textcolor[HTML]{FF0000}{\textbf{Đỏ}}: $\mu$ thấp nhất; \textcolor[HTML]{0000FF}{xanh}:
+khoảng $\mu\pm\sigma$ chồng lấn với mô hình tốt nhất.
+
+\vspace{0.1cm}
+\begin{center}
+\begin{minipage}{0.7\textwidth}
+\input{tables/new_load.tex}
+\end{minipage}
+\end{center}
 \end{frame}
 
 \subsection{Kết quả hiệu năng}
@@ -655,13 +772,83 @@ Electricity ($C=321$), $L=S=720$. Epoch Time: thời gian một bước huấn l
 
 \end{frame}
 
+\begin{frame}{Độ chính xác và tốc độ: ETTh1}
+\centering
+\includegraphics[width=\textwidth,height=0.76\textheight,keepaspectratio]{tradeoff/ETTh1.pdf}
+
+\vspace{0.05cm}
+\raggedright\scriptsize
+MSE: trung bình 4 horizon trên ETTh1 (như bảng kết quả). Infer Time: đo một lần ở cấu hình Electricity
+($C=321$, $L=S=720$, như bảng hiệu năng). Góc dưới trái là vừa chính xác vừa nhanh.
+\end{frame}
+
+\begin{frame}{Độ chính xác và tốc độ: ETTh2}
+\centering
+\includegraphics[width=\textwidth,height=0.76\textheight,keepaspectratio]{tradeoff/ETTh2.pdf}
+
+\vspace{0.05cm}
+\raggedright\scriptsize
+MSE: trung bình 4 horizon trên ETTh2 (như bảng kết quả). Infer Time: đo một lần ở cấu hình Electricity
+($C=321$, $L=S=720$, như bảng hiệu năng). Góc dưới trái là vừa chính xác vừa nhanh.
+\end{frame}
+
+\begin{frame}{Độ chính xác và tốc độ: ETTm1}
+\centering
+\includegraphics[width=\textwidth,height=0.76\textheight,keepaspectratio]{tradeoff/ETTm1.pdf}
+
+\vspace{0.05cm}
+\raggedright\scriptsize
+MSE: trung bình 4 horizon trên ETTm1 (như bảng kết quả). Infer Time: đo một lần ở cấu hình Electricity
+($C=321$, $L=S=720$, như bảng hiệu năng). Góc dưới trái là vừa chính xác vừa nhanh.
+\end{frame}
+
+\begin{frame}{Độ chính xác và tốc độ: ETTm2}
+\centering
+\includegraphics[width=\textwidth,height=0.76\textheight,keepaspectratio]{tradeoff/ETTm2.pdf}
+
+\vspace{0.05cm}
+\raggedright\scriptsize
+MSE: trung bình 4 horizon trên ETTm2 (như bảng kết quả). Infer Time: đo một lần ở cấu hình Electricity
+($C=321$, $L=S=720$, như bảng hiệu năng). Góc dưới trái là vừa chính xác vừa nhanh.
+\end{frame}
+
+\begin{frame}{Độ chính xác và tốc độ: Weather}
+\centering
+\includegraphics[width=\textwidth,height=0.76\textheight,keepaspectratio]{tradeoff/Weather.pdf}
+
+\vspace{0.05cm}
+\raggedright\scriptsize
+MSE: trung bình 4 horizon trên Weather (như bảng kết quả). Infer Time: đo một lần ở cấu hình Electricity
+($C=321$, $L=S=720$, như bảng hiệu năng). Góc dưới trái là vừa chính xác vừa nhanh.
+\end{frame}
+
+\begin{frame}{Độ chính xác và tốc độ: Tetouan}
+\centering
+\includegraphics[width=\textwidth,height=0.76\textheight,keepaspectratio]{tradeoff/Tetouan.pdf}
+
+\vspace{0.05cm}
+\raggedright\scriptsize
+MSE: trung bình 4 horizon trên Tetouan (như bảng kết quả). Infer Time: đo một lần ở cấu hình Electricity
+($C=321$, $L=S=720$, như bảng hiệu năng). Góc dưới trái là vừa chính xác vừa nhanh.
+\end{frame}
+
+\begin{frame}{Độ chính xác và tốc độ: Panama}
+\centering
+\includegraphics[width=\textwidth,height=0.76\textheight,keepaspectratio]{tradeoff/Panama.pdf}
+
+\vspace{0.05cm}
+\raggedright\scriptsize
+MSE: trung bình 4 horizon trên Panama (như bảng kết quả). Infer Time: đo một lần ở cấu hình Electricity
+($C=321$, $L=S=720$, như bảng hiệu năng). Góc dưới trái là vừa chính xác vừa nhanh.
+\end{frame}
+
 \begin{frame}{Nhận xét hiệu năng}
 \begin{itemize}
     \item DyBAS-Net \textbf{nhanh thứ hai trong 16 mô hình} khi suy luận (1.63 ms một mẫu), chỉ sau TimeBase (1.01 ms).
-    \item Nhanh hơn SparseTSF (2.39 ms), CycleNet-L (6.71 ms), FITS (7.48 ms), DLinear (7.88 ms), CycleNet-M (7.93 ms)
-          và TQNet (25.04 ms, gấp 15 lần).
+    \item Nhanh hơn SparseTSF (2.39 ms), CycleNet/Linear (6.71 ms), FITS (7.48 ms), CycleNet/MLP (7.93 ms),
+          TQNet (25.04 ms, gấp 15 lần) và GTR (28.37 ms, gấp 17 lần).
     \item So với các mô hình sâu: nhanh hơn iTransformer $\sim$29 lần, TimeMixer $\sim$500 lần, PatchTST $\sim$570 lần,
-          TimesNet hơn 8\,000 lần.
+          MS-FLOW $\sim$1\,300 lần, TimesNet hơn 8\,000 lần.
     \item Huấn luyện nhẹ: 40 s một epoch.
 \end{itemize}
 
@@ -679,8 +866,8 @@ Biến đổi theo trục thời gian chạy trên $N$, $R$, $P$ (vài chục) t
           có điều chuẩn thưa (CrossVBlock, DropFusion, IntraVBlock của DyTimeNet), đặt trong \emph{không gian cơ sở}.
     \item \textbf{Rất nhẹ:} 23.8M MACs, 1.63 ms một mẫu trên CPU ở cấu hình Electricity; nhanh thứ hai trong 16 mô hình,
           nhanh hơn TQNet 15 lần và nhanh hơn iTransformer, TimeMixer, PatchTST, TimesNet từ 29 đến hơn 8\,000 lần.
-    \item \textbf{Nhánh trộn biến có ích:} so với TimeBase cùng quy trình, giảm MSE trung bình trên 3/5 bộ dữ liệu (tới
-          $4.5\%$ trên ETTm1).
+    \item \textbf{Nhánh trộn biến có ích:} so với TimeBase cùng quy trình, giảm MSE trung bình trên cả 5/5 bộ dữ liệu (tới
+          $3.7\%$ trên ETTm1).
 \end{itemize}
 \end{frame}
 

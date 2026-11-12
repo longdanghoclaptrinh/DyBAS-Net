@@ -15,20 +15,23 @@ DATASETS = {"ETTh1": "results/suite_ETTh1_L720.json", "ETTh2": "results/suite_ET
 HORIZONS = ("96", "192", "336", "720")
 SEEDS = (2021, 2022, 2023)
 # Tự chạy trong cùng pipeline, 3 seed. CycleNet/TQNet theo siêu tham số chính thức của từng mô hình
-# (scripts/run_suite.py, PERIODIC_TRAIN); không có số công bố ở L = 720 trong Table 10 của TimeBase.
-OURS = {"DyTimeBase": "dytbase_off", "TimeBase*": "timebase_off", "CycleNet/Linear": "cyclenet_off",
+# (scripts/run_suite.py, PERIODIC_TRAIN); không có số công bố ở L = 720 trong Table 10 của TimeBase. DyTimeNet: mô hình
+# gốc của Đồ án I (run_suite dytimenet, p1/p2 trong configs/*.yaml).
+OURS = {"DyTimeBase": "dytbase_off", "TimeBase*": "timebase_off", "DyTimeNet": "dytimenet", "CycleNet/Linear": "cyclenet_off",
         "CycleNet/MLP": "cyclenet_mlp_off", "TQNet": "tqnet_off"}
 PUBLISHED = ["TimeBase", "SparseTSF", "TimeMixer", "FITS", "iTransformer", "DLinear", "PatchTST", "TimesNet",
              "FEDformer", "Autoformer", "Informer"]
-# DyTimeBase dùng (p1, p2) chọn theo val loss từ lưới DropFusion (d_model 64, scripts/summarize_grid.py) trên các
-# dataset này; dataset khác giữ dytbase_off (bộ của Đồ án I). Kết quả lưới ở results/grid_<dataset>_L720*.json.
-TUNED = {"ETTh2": "dytbase_d64_p0.3_0.5", "ETTm2": "dytbase_d64_p0.4_0.6"}
+# DyTimeBase báo cáo: huấn luyện hai giai đoạn (scripts/run_fix.py, dytbase_2stage) — nạp TimeBase* cùng horizon và
+# seed, đóng băng backbone, chỉ train nhánh trộn kênh (d_model 64, p1/p2 theo run_fix.TUNED); epoch 0 = TimeBase* nên
+# val không kém backbone. Kết quả ở results/fix_<dataset>_L720.json; bản một giai đoạn (dytbase_off, lưới DropFusion ở
+# results/grid_<dataset>_L720*.json) vẫn giữ để so sánh.
+TUNED = {ds: "dytbase_2stage" for ds in DATASETS}
 
 
 def load_runs(ds):
-    """Mọi lần chạy của một dataset: file suite cộng các file lưới DropFusion."""
+    """Mọi lần chạy của một dataset: file suite cộng các file lưới DropFusion và results/fix_*."""
     runs = json.loads(Path(DATASETS[ds]).read_text(encoding="utf-8"))
-    for path in sorted(Path("results").glob(f"grid_{ds}_L720*.json")):
+    for path in sorted(Path("results").glob(f"grid_{ds}_L720*.json")) + [Path(f"results/fix_{ds}_L720.json")]:
         runs.update(json.loads(path.read_text(encoding="utf-8")))
     return runs
 
