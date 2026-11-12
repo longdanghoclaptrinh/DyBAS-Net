@@ -58,6 +58,16 @@ def train(config):
         config.num_workers, config.target_cols, config.scale, dataset_name=config.dataset,
         cycle_len=config.cycle_len, device=device)
     model = build_model(config.model, **config.model_kwargs(num_vars)).to(device)
+    if config.init_from:   # giai đoạn 2: nạp backbone đã train (vd. TimeBase cùng horizon, cùng seed)
+        state = torch.load(config.init_from, map_location="cpu", weights_only=True)
+        missing, unexpected = model.load_state_dict(state.get("model_state_dict", state), strict=False)
+        mix_names = {n for n, _ in model.named_parameters() if n.split(".")[0] in ("embed", "cross", "intra", "out")}
+        if unexpected or set(missing) - mix_names:
+            raise ValueError(f"init_from does not match the backbone: missing={missing}, unexpected={unexpected}")
+    if config.freeze_backbone:
+        mix_ids = {id(p) for p in model.mix_parameters()}
+        for p in model.parameters():
+            p.requires_grad_(id(p) in mix_ids)
     print(f"{config.model} | {config.dataset} | L={config.seq_len} S={config.pred_len} | "
           f"device={device} | parameters={model.count_parameters():,}")
     # 3. Tạo thư mục riêng và lưu thông tin để tái lập lần chạy.
@@ -90,9 +100,13 @@ def train(config):
         mix_ids = {id(p) for p in mix}
         groups = [{"params": [p for p in model.parameters() if id(p) not in mix_ids], "base_lr": config.lr},
                   {"params": mix, "base_lr": config.mix_lr}]
+        if config.freeze_backbone:
+            groups = groups[1:]
     optimizer = optim.Adam(groups, lr=config.lr, weight_decay=config.weight_decay)
     history = []
     start = time.perf_counter()
+    if config.init_from:   # epoch 0 = backbone đã nạp: early stopping giữ nó nếu nhánh trộn kênh không giúp val
+        early(run_epoch(model, val_loader, criterion, device=device)["loss"], model, 0)
     # 5. Mỗi epoch: cập nhật LR → train → validation → lưu checkpoint nếu cải thiện.
     for epoch in range(config.epochs):
         lr = cosine_lr(optimizer, epoch, config.lr, config.epochs, config.warmup_epochs, config.lr_schedule)

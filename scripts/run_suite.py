@@ -4,7 +4,7 @@ Ví dụ: python scripts/run_suite.py --dataset Weather --variants dyt_norm dyt_
        python scripts/run_suite.py --dataset Weather --seq_len 720 --variants dyt_rcf timebase_lr0.02
 Kết quả từng run ghi ngay vào results/suite_<dataset>.json (L = 96) hoặc results/suite_<dataset>_L<L>.json
 (chạy lại để tiếp tục phần còn thiếu). TimeBase train với vài lr (paper tìm lr trong [0.01, 0.5]); chọn lr theo
-val loss tốt nhất trong scripts/compare_suite.py.
+val loss tốt nhất.
 """
 
 import argparse
@@ -21,7 +21,9 @@ from dytimenet.config import load_config
 
 # Chu kỳ dài nhất ổn định của từng dataset (như Table 1 của CycleNet): ngày theo tần số lấy mẫu; Electricity và
 # Traffic dùng tuần (168 giờ) như scripts/*/electricity.sh, traffic.sh của CycleNet/TQNet.
-CYCLE = {"ETTh1": 24, "ETTh2": 24, "ETTm1": 96, "ETTm2": 96, "Weather": 144, "Electricity": 168, "Traffic": 168}
+CYCLE = {"ETTh1": 24, "ETTh2": 24, "ETTm1": 96, "ETTm2": 96, "Weather": 144, "Electricity": 168, "Traffic": 168,
+         "Load": 24, "Exchange": 7,   # Exchange (theo ngày) không có chu kỳ: dùng tuần lịch
+         "Tetouan": 144, "Panama": 24, "PJM": 24}
 # Độ dài đoạn P của TimeBase theo paper (Phụ lục C.1): chu kỳ tự nhiên, Weather dùng P = 4.
 TB_PERIOD = {"ETTh1": 24, "ETTh2": 24, "Weather": 4}
 TB_LRS = (0.005, 0.02, 0.08)
@@ -45,8 +47,23 @@ TB_OFFICIAL = {
     "Traffic": {96: (0.04, 128, 0.05, 24, 6), 192: (0.04, 128, 0.03, 24, 8), 336: (0.08, 128, 0.03, 24, 15),
                 720: (0.04, 128, 0.03, 24, 8)},
 }
+TB_OFFICIAL["Load"] = TB_OFFICIAL["ETTh1"]   # phụ tải theo giờ: cấu hình chính thức của ETTh1 (cùng tần số)
+# Exchange: như ETTh1, chỉ đổi P thành chu kỳ lịch của dữ liệu ngày (7), như ETTh1 dùng P = chu kỳ ngày (24).
+TB_OFFICIAL["Exchange"] = {h: (*v[:3], CYCLE["Exchange"], v[4]) for h, v in TB_OFFICIAL["ETTh1"].items()}
+# Ba bộ phụ tải mới không có cấu hình chính thức: lấy theo dataset cùng tần số (Panama/PJM theo giờ như ETTh1,
+# Tetouan 10 phút như Weather). P, R chọn từ dữ liệu (phần train), không grid search: P = chu kỳ ngày (ACF và FFT
+# của mọi biến đạt đỉnh ở 24 giờ); R = 6 như TimeBase trên mọi bộ theo giờ, vì phần dư sau rank R của ma trận đoạn
+# N × P (đã trừ mean theo pha) là 0.05 (PJM) và 0.10 (Panama), thấp hơn ETTh1 (0.23) và Load (0.37) cũng với R = 6.
+# Tetouan: chu kỳ ngày 144 bước 10 phút (đỉnh ACF/FFT của phụ tải và bức xạ), L = 720 chỉ có N = 5 đoạn; R = 3 để
+# vẫn nén (R = 4 gần như giữ nguyên), phần dư 0.14.
+TB_OFFICIAL["Panama"] = TB_OFFICIAL["PJM"] = TB_OFFICIAL["ETTh1"]
+TB_OFFICIAL["Tetouan"] = TB_OFFICIAL["Weather"]
+PR_TUNED = {"Panama": (24, 6), "PJM": (24, 6), "Tetouan": (144, 3)}   # dataset → (P, R) dùng chung mọi horizon
+for _ds, (_p, _r) in PR_TUNED.items():
+    TB_OFFICIAL[_ds] = {h: (*v[:3], _p, _r) for h, v in TB_OFFICIAL[_ds].items()}
 TB_INDIVIDUAL = {"ETTh1": False, "ETTh2": False, "ETTm1": False, "ETTm2": False, "Weather": True,
-                 "Electricity": False, "Traffic": False}
+                 "Electricity": False, "Traffic": False, "Load": False,
+                 "Exchange": False, "Tetouan": True, "Panama": False, "PJM": False}
 # Lịch train chung của CycleNet/TQNet (run.py chính thức): 30 epoch, patience 5, lradj type3, Adam không weight decay,
 # không clip gradient. CycleNet theo scripts/CycleNet/{Linear,MLP}-Input-720/*.sh (MLP d_model 512). TQNet chỉ có
 # script L = 96 (scripts/TQNet/*.sh): giữ nguyên siêu tham số, chỉ đổi seq_len; d_model 512.
@@ -59,9 +76,24 @@ PERIODIC_OFFICIAL = {
     "Weather": ((256, 0.005), (256, 0.0005), (64, 0.001), 0.5),
     "Electricity": ((64, 0.005), (64, 0.001), (32, 0.003), 0.0),
     "Traffic": ((64, 0.005), (64, 0.0005), (16, 0.003), 0.0),
+    "Load": ((256, 0.005), (256, 0.0005), (256, 0.001), 0.5),   # như ETTh1
+    "Exchange": ((256, 0.005), (256, 0.0005), (256, 0.001), 0.5),   # như ETTh1
 }
+PERIODIC_OFFICIAL["Panama"] = PERIODIC_OFFICIAL["PJM"] = PERIODIC_OFFICIAL["ETTh1"]
+PERIODIC_OFFICIAL["Tetouan"] = PERIODIC_OFFICIAL["Weather"]
 DF_GRID = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6)   # p1 (DropEdge), p2 (DropNeuron) cho lưới dytbase_d64_p*
+# R lớn hơn PR_TUNED cho ba bộ phụ tải (giai đoạn 1 timebase_off_R*, giai đoạn 2 run_fix dytbase_2stage_R*); Tetouan chỉ
+# có N = 5 đoạn nên R ≤ 5. Chọn theo val loss.
+R_GRID = {"Tetouan": (4, 5), "Panama": (8, 12), "PJM": (8, 12)}
 PERIODIC_TRAIN = {"epochs": 30, "patience": 5, "lr_schedule": "type3", "weight_decay": 0.0, "grad_clip": 0.0}
+
+
+# SparseTSF theo scripts/SparseTSF/linear/etth1.sh chính thức (L = 720): P = 24, batch 256, lr 0.02, 30 epoch,
+# patience 5; run_longExp.py: lradj type3, Adam, không clip gradient.
+SPARSETSF_OFFICIAL = {"model": "sparsetsf", "period": 24, "batch_size": 256, "lr": 0.02, **PERIODIC_TRAIN}
+# Khác etth1.sh theo scripts/SparseTSF/linear/<bộ>.sh (lss-1138/SparseTSF): ETTh2 lr 0.03; ETTm1, ETTm2, Weather P = 4.
+# Tetouan, Panama, PJM, Load, Exchange giữ như trước (etth1.sh; Exchange P = 7).
+SPARSETSF_SCRIPT = {"ETTh2": {"lr": 0.03}, "ETTm1": {"period": 4}, "ETTm2": {"period": 4}, "Weather": {"period": 4}}
 
 
 def periodic(dataset):
@@ -89,6 +121,8 @@ def official(dataset, model, **extra):
 def variants(dataset):
     w = CYCLE[dataset]
     return {
+        # DyTimeNet gốc (Đồ án I): mặc định của config.py và p1/p2 trong configs/<dataset>.yaml.
+        "dytimenet": {},
         "dyt_norm": {"cross_residual": "norm"},
         "dyt_rcf": {"cross_residual": "norm", "cycle_len": w},
         "dyt_rcf_noaff": {"cross_residual": "norm", "cycle_len": w, "affine_revin": False},
@@ -109,7 +143,11 @@ def variants(dataset):
             "dytbase_nointra": official(dataset, "dytimebase", mix_lr=5e-4, use_intra=False),
             # Cùng kiến trúc, lr nhánh trộn kênh gấp 4 (lịch type3 giảm lr rất nhanh).
             "dytbase_mixlr2e-3": official(dataset, "dytimebase", mix_lr=2e-3)} if dataset in TB_OFFICIAL else {}),
+        **{f"timebase_off_R{r}": official(dataset, "timebase", basis_num=r) for r in R_GRID.get(dataset, ())},
         **periodic(dataset),
+        # Exchange không có chu kỳ ngày: P = 7 như TimeBase (TB_OFFICIAL["Exchange"]).
+        "sparsetsf_off": {**SPARSETSF_OFFICIAL, **({"period": w} if dataset == "Exchange" else {}),
+                          **SPARSETSF_SCRIPT.get(dataset, {})},
         # Lưới DropFusion của nhánh trộn kênh (d_model 64 cố định, xương sống như dytbase_off); chọn theo val loss.
         **({f"dytbase_d64_p{p1:g}_{p2:g}": official(dataset, "dytimebase", mix_lr=5e-4, d_model=64, p1=p1, p2=p2)
             for p1 in DF_GRID for p2 in DF_GRID} if dataset in TB_OFFICIAL else {}),

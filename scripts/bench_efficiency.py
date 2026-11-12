@@ -32,7 +32,11 @@ C, L, S, MEM_BATCH = 321, 720, 720, 12
 TRAIN_WINDOWS = int(26304 * 0.7) - L - S + 1          # Electricity: 26 304 dòng, train 70%
 MODELS = ["Informer", "Autoformer", "FEDformer", "TimesNet", "PatchTST", "DLinear", "FITS", "iTransformer",
           "TimeMixer", "SparseTSF", "TimeBase", "DyTimeNet (cũ)", "DyTimeBase", "CycleNet/Linear", "CycleNet/MLP",
-          "TQNet"]
+          "TQNet", "MS-FLOW", "GTR"]
+# MS-FLOW: mặc định run.py của repo chính thức (chưa có script), như run_external.MSFLOW_ARCH.
+MSFLOW_ARCH = {"patch_len": 16, "stride": 8, "d_model": 256, "e_layers": 3, "top_k": 10, "dropout": 0.1}
+# GTR: scripts/Input-720/electricity.sh (cycle 168, batch 64), còn lại mặc định run.py như run_external.GTR_DEFAULTS.
+GTR_ARCH = {"d_model": 512, "dropout": 0.0, "use_revin": 1, "individual": 0, "cycle": 168}
 # CycleNet/TQNet: cấu hình script electricity.sh chính thức (chu kỳ 168 = một tuần, d_model 512).
 CYCLE_MODELS = {"CycleNet/Linear": "cyclenet", "CycleNet/MLP": "cyclenet_mlp", "TQNet": "tqnet"}
 TSLIB = {   # script ECL chính thức của TSLib (PatchTST theo repo PatchTST)
@@ -47,7 +51,7 @@ TSLIB = {   # script ECL chính thức của TSLib (PatchTST theo repo PatchTST)
 }
 
 
-def build(name, tslib, fits):
+def build(name, tslib, fits, msflow=None, gtr=None):
     import torch
     from torch import nn
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -75,6 +79,22 @@ def build(name, tslib, fits):
             def forward(self, x):                                   # pha chu kỳ 0 cho mọi mẫu
                 return self.m(x, torch.zeros(x.shape[0], dtype=torch.long))
         return CycleWrap(model)
+    if name in ("MS-FLOW", "GTR"):
+        file = msflow if name == "MS-FLOW" else str(Path(gtr) / "models/GTR.py")
+        spec = importlib.util.spec_from_file_location(name.replace("-", "_").lower() + "_official", file)
+        mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+        arch = MSFLOW_ARCH if name == "MS-FLOW" else GTR_ARCH
+        model = mod.Model(types.SimpleNamespace(enc_in=C, seq_len=L, pred_len=S, **arch))
+
+        class OfficialWrap(nn.Module):
+            def __init__(self, m):
+                super().__init__(); self.m = m
+
+            def forward(self, x):                                   # [B, C, L] → [B, C, S]; GTR: pha chu kỳ 0
+                x = x.transpose(1, 2)
+                out = self.m(x) if name == "MS-FLOW" else self.m(x, torch.zeros(x.shape[0], dtype=torch.long))
+                return out.transpose(1, 2)
+        return OfficialWrap(model)
     if name == "FITS":
         sys.modules.setdefault("models", types.ModuleType("models"))
         sys.modules["models.NLinear"] = types.ModuleType("models.NLinear")
@@ -110,7 +130,7 @@ def worker(args):
     batch = args.batch
     x = torch.randn(batch, C, L); y = torch.randn(batch, C, S)
     before = proc.memory_info().rss
-    model = build(args.worker, args.tslib, args.fits)
+    model = build(args.worker, args.tslib, args.fits, args.msflow, args.gtr)
     out = {"params": sum(p.numel() for p in model.parameters()), "batch": batch}
     model.train()
     opt = torch.optim.Adam(model.parameters(), lr=1e-4)
@@ -150,7 +170,7 @@ def worker(args):
 def run_child(name, batch, args):
     import psutil
     cmd = [sys.executable, "-I", str(Path(__file__).resolve()), "--worker", name, "--batch", str(batch),
-           "--tslib", args.tslib, "--fits", args.fits, "--train_budget", str(args.train_budget),
+           "--tslib", args.tslib, "--fits", args.fits, "--msflow", args.msflow, "--gtr", args.gtr, "--train_budget", str(args.train_budget),
            "--infer_budget", str(args.infer_budget)]
     child = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
     ps, peak, killed = psutil.Process(child.pid), 0, False
@@ -186,6 +206,8 @@ def main(argv=None):
     parser.add_argument("--batch", type=int, default=MEM_BATCH)
     parser.add_argument("--tslib", required=True)
     parser.add_argument("--fits", required=True)
+    parser.add_argument("--msflow", default="D:/MSFLOW-official/models/MS-FLOW.py")
+    parser.add_argument("--gtr", default="D:/GTR-official")
     parser.add_argument("--models", nargs="+", default=MODELS)
     parser.add_argument("--mem_limit_gb", type=float, default=11.0)
     parser.add_argument("--train_budget", type=float, default=20.0, help="giây tối đa để đo bước train")

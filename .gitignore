@@ -3,6 +3,9 @@
 !/data/README.md
 /checkpoints/
 /local/
+/logs/
+# Dữ liệu phụ tải Hà Nội (EVN) không công khai
+/configs/*.csv
 /runs/
 /outputs/
 *.pt

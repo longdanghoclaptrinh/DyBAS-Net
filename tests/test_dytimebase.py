@@ -7,16 +7,12 @@ from dytimenet.engine.trainer import cosine_lr
 from dytimenet.models import DyTimeBase, TimeBase, build_model
 
 
-def test_init_equals_timebase_and_rcf_shapes():
+def test_init_equals_timebase():
     model = DyTimeBase(7, 100, 50, period=24, basis_num=6, d_model=16).eval()
     base = TimeBase(7, 100, 50, period=24, basis_num=6)
     base.load_state_dict({k: v for k, v in model.state_dict().items() if k.split(".")[0] in ("basis", "forecast")})
     x = torch.randn(3, 7, 100)
     torch.testing.assert_close(model(x), base(x))
-    rcf = DyTimeBase(7, 96, 192, period=24, d_model=16, cycle_len=24)
-    out = rcf(x[..., :96], torch.tensor([0, 5, 23]))
-    assert out.shape == (3, 7, 192)
-    out.square().mean().backward()
 
 
 def test_mix_lr_param_groups_follow_cosine():

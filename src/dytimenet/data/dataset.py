@@ -38,8 +38,9 @@ class TimeSeriesDataset(Dataset):
         if not Path(data_path).is_file():
             raise FileNotFoundError(f"CSV not found: {data_path}. See data/README.md or use --data_path.")
         df = pd.read_csv(data_path)
-        date_cols = [c for c in df.columns
-                     if any(kw in c.lower() for kw in ("date", "time", "timestamp"))]
+        date_cols = [c for c in df.columns   # chỉ cột thời gian dạng chữ (giữ biến số như time_factor)
+                     if any(kw in c.lower() for kw in ("date", "time", "timestamp"))
+                     and not pd.api.types.is_numeric_dtype(df[c])]
         df = df.drop(columns=date_cols)
         if target_cols:
             missing = set(target_cols) - set(df.columns)

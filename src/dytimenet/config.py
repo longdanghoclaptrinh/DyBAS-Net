@@ -7,7 +7,8 @@ from pathlib import Path
 
 import yaml
 
-DATASET_NAMES = ("ETTh1", "ETTh2", "ETTm1", "ETTm2", "Weather", "Electricity", "Traffic")
+DATASET_NAMES = ("ETTh1", "ETTh2", "ETTm1", "ETTm2", "Weather", "Electricity", "Traffic", "Load", "Exchange",
+                 "Tetouan", "Panama", "PJM")
 MODEL_NAMES = ("dytimenet", "rlinear", "dlinear", "timebase", "sparsetsf", "dytimebase",
                "cyclenet", "cyclenet_mlp", "tqnet")
 CYCLE_MODELS = ("cyclenet", "cyclenet_mlp", "tqnet")   # cần pha chu kỳ (cycle_len > 0)
@@ -56,6 +57,10 @@ class ExperimentConfig:
     grad_clip: float = 1.0     # chuẩn tối đa của gradient; 0 = không clip
     use_cross: bool = True     # DyTimeBase: tắt CrossVBlock (chỉ để ablation)
     use_intra: bool = True     # DyTimeBase: tắt IntraVBlock (chỉ để ablation)
+    inst_std: bool = False     # TimeBase/DyTimeBase: chia thêm cho std của cửa sổ (như RevIN không affine)
+    mix_detach: bool = False   # DyTimeBase: chặn gradient từ nhánh trộn kênh về backbone qua đầu vào E
+    init_from: str = ""        # best.pt để nạp trọng số trước khi train (huấn luyện hai giai đoạn)
+    freeze_backbone: bool = False  # DyTimeBase: đóng băng backbone, chỉ train nhánh trộn kênh (cần init_from)
 
     def validate(self):
         """Reject invalid settings before reading data or creating a checkpoint."""
@@ -88,7 +93,8 @@ class ExperimentConfig:
             raise ValueError("lr must be positive; weight_decay and min_delta cannot be negative")
         if self.ffn_ratio <= 0 or int(self.d_model * self.ffn_ratio) < 1 or self.hidden_ratio <= 0:
             raise ValueError("ffn_ratio and hidden_ratio must produce positive hidden dimensions")
-        for name in ("scale", "affine_revin", "period_norm", "individual", "use_cross", "use_intra"):
+        for name in ("scale", "affine_revin", "period_norm", "individual", "use_cross", "use_intra",
+                     "inst_std", "mix_detach", "freeze_backbone"):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f"{name} must be a boolean")
         for name in ("data_path", "save_dir"):
@@ -98,12 +104,18 @@ class ExperimentConfig:
             raise ValueError(f"model must be one of: {', '.join(MODEL_NAMES)}")
         if self.model in CYCLE_MODELS and self.cycle_len == 0:
             raise ValueError(f"{self.model} needs cycle_len > 0")
+        if self.model == "dytimebase" and self.cycle_len:
+            raise ValueError("dytimebase does not use RCF (cycle_len must be 0)")
         if self.model == "tqnet" and self.seq_len % 4:
             raise ValueError("tqnet needs seq_len divisible by 4 (4 attention heads)")
         for name in ("mix_lr", "orth_weight", "grad_clip"):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
                 raise ValueError(f"{name} must be a non-negative number")
+        if not isinstance(self.init_from, str):
+            raise ValueError("init_from must be a path string ('' = không nạp)")
+        if self.freeze_backbone and (self.model != "dytimebase" or not self.init_from or not self.mix_lr):
+            raise ValueError("freeze_backbone needs model dytimebase, init_from and mix_lr > 0")
         if self.lr_schedule not in ("cosine", "type3"):
             raise ValueError("lr_schedule must be cosine or type3")
         if self.cross_residual not in ("double", "single", "norm"):
@@ -124,8 +136,12 @@ class ExperimentConfig:
                  "cross_residual", "cycle_len")
         if self.model in ("timebase", "sparsetsf", "dytimebase"):
             names += ("period", "basis_num", "period_norm", "individual")
+        if self.model in ("timebase", "dytimebase") and self.inst_std:
+            names += ("inst_std",)
         if self.model == "dytimebase":
             names += ("use_cross", "use_intra")
+            if self.mix_detach:
+                names += ("mix_detach",)
         return {"num_vars": num_vars, **{name: getattr(self, name) for name in names}}
 
     def to_dict(self):
@@ -166,6 +182,8 @@ def training_parser():
             parser.add_argument("--model", choices=MODEL_NAMES, default=None)
         elif name == "lr_schedule":
             parser.add_argument("--lr_schedule", choices=("cosine", "type3"), default=None)
+        elif name == "init_from":
+            parser.add_argument("--init_from", default=None)
         elif name == "cross_residual":
             parser.add_argument("--cross_residual", choices=("double", "single", "norm"), default=None)
         elif isinstance(value, bool):
