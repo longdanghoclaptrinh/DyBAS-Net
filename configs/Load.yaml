@@ -1,6 +1,6 @@
 # Phụ tải điện thực tế (theo giờ, 10 biến, 2020-01 → 2025-05); chia 70/10/20 như Weather.
 dataset: Load
-data_path: load_new.csv
+data_path: data/load_new.csv
 d_model: 64
 batch_size: 64
 p1: 0.1
