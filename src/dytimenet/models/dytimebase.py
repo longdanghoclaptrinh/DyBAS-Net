@@ -1,0 +1,64 @@
+"""DyTimeBase: dự báo theo basis của TimeBase + trộn kênh của DyTimeNet trên không gian basis.
+
+Ý tưởng (đọc cùng TimeBase, ICML 2025, và DyTimeNet):
+  1. Trừ mean, cắt chuỗi dài L thành N đoạn dài P: X ∈ R^{P×N}.
+  2. Rút R basis theo thời gian bằng Linear N→R dùng chung mọi kênh: E ∈ R^{P×R} (R ≪ N).
+  3. Nhánh trộn kênh chạy trên E (P·R số mỗi kênh, thay vì L điểm): Linear P·R→D → CrossV (trộn kênh) →
+     IntraV (FFN) → Linear D→P·R, cộng vào E. Lớp cuối khởi tạo 0 nên lúc đầu mô hình đúng bằng TimeBase.
+  4. Dự báo theo đoạn bằng Linear R→N′ dùng chung, ghép lại thành S điểm, cộng lại mean.
+
+Vì sao nhanh: mọi phép trên trục thời gian đều chạy trên N, R, P (vài chục) thay vì L, S (hàng trăm); phần trộn kênh
+chạy trên vector D chiều. Ví dụ Electricity (C = 321, L = S = 720): khoảng 20M MACs so với 211M của DyTimeNet và
+333M của DLinear.
+"""
+
+import torch
+from torch import nn
+
+from dytimenet.layers.cross_v_block import CrossVBlock
+from dytimenet.layers.intra_v_block import IntraVBlock
+
+from .linear_baselines import PerChannelLinear, _Segmented, orthogonal_loss
+
+
+class DyTimeBase(_Segmented):
+    def __init__(self, num_vars: int, seq_len: int, pred_len: int, period: int = 24, basis_num: int = 6,
+                 d_model: int = 64, p1: float = 0.1, p2: float = 0.1, hidden_ratio: float = 0.75,
+                 ffn_ratio: float = 2.0, dropout: float = 0.1,
+                 period_norm: bool = False, individual: bool = False, use_cross: bool = True,
+                 use_intra: bool = True, inst_std: bool = False, mix_detach: bool = False, **_):
+        super().__init__(seq_len, pred_len, period)
+        self.period_norm = period_norm
+        self.inst_std, self.mix_detach = inst_std, mix_detach
+        if individual:   # backbone giống TimeBase individual = True
+            self.basis = PerChannelLinear(num_vars, self.n_in, basis_num)
+            self.forecast = PerChannelLinear(num_vars, basis_num, self.n_out)
+        else:
+            self.basis = nn.Linear(self.n_in, basis_num)        # BasisExtract: N đoạn → R basis
+            self.forecast = nn.Linear(basis_num, self.n_out)    # SegmentForecast: R basis → N′ đoạn
+        self.aux_loss = None
+        feat = period * basis_num
+        self.embed = nn.Linear(feat, d_model)
+        # use_cross / use_intra = False chỉ dùng cho ablation; mô hình đề xuất bật cả hai.
+        self.cross = CrossVBlock(num_vars, d_model, p1=p1, p2=p2, hidden_ratio=hidden_ratio,
+                                 residual_from_norm=True) if use_cross else nn.Identity()
+        self.intra = IntraVBlock(d_model, ffn_ratio=ffn_ratio, dropout=dropout) if use_intra else nn.Identity()
+        self.out = nn.Linear(d_model, feat)
+        nn.init.zeros_(self.out.weight)
+        nn.init.zeros_(self.out.bias)
+
+    def mix_parameters(self):
+        """Tham số của nhánh trộn kênh (để dùng lr riêng); phần còn lại là backbone TimeBase."""
+        return [p for name, p in self.named_parameters() if name.split(".")[0] in ("embed", "cross", "intra", "out")]
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """x : [B, C, L] → [B, C, S]."""
+        B, C, _ = x.shape
+        seg, mean, std = self._normalize(self._segments(x), self.period_norm, self.inst_std)  # [B, C, P, N]
+        e = self.basis(seg)                                                           # [B, C, P, R]
+        self.aux_loss = orthogonal_loss(e) if self.training else None
+        # mix_detach: gradient của nhánh trộn kênh không chảy ngược vào basis qua đầu vào E.
+        h = self.embed((e.detach() if self.mix_detach else e).reshape(B, C, -1))      # [B, C, D]
+        h = self.intra(self.cross(h))
+        e = e + self.out(h).reshape(e.shape)
+        return self._merge(self.forecast(e) * std + mean)                             # [B, C, S]

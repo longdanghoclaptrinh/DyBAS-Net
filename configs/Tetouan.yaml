@@ -1,0 +1,7 @@
+# Phụ tải 3 vùng + 5 biến thời tiết của Tetouan (10 phút, 8 biến, năm 2017); chia 70/10/20 như Weather.
+dataset: Tetouan
+data_path: data/tetouan.csv
+d_model: 64
+batch_size: 64
+p1: 0.2
+p2: 0.5

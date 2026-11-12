@@ -1,0 +1,23 @@
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccclll}
+\toprule
+Đối thủ & Thắng & Hòa & Thua & DyBAS-Net tốt hơn & Chưa phân biệt & DyBAS-Net kém hơn\\
+ & \multicolumn{3}{c}{(20 ô dataset $\times$ $S$)} & \multicolumn{3}{c}{(MSE trung bình 4 horizon)}\\
+\midrule
+TimeBase & 12 & 8 & 0 & ETTm1, Weather & ETTh1, ETTh2, ETTm2 & --\\
+MS-FLOW & 14 & 6 & 0 & ETTh1, ETTm1, ETTm2, Weather & ETTh2 & --\\
+CycleNet/Linear & 9 & 7 & 4 & ETTh1, Weather & ETTm1, ETTm2 & ETTh2\\
+CycleNet/MLP & 15 & 5 & 0 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & -- & --\\
+TQNet & 13 & 6 & 1 & ETTh1, ETTm2, Weather & ETTh2, ETTm1 & --\\
+GTR & 12 & 8 & 0 & ETTh1, ETTm2, Weather & ETTh2, ETTm1 & --\\
+SparseTSF~\cite{Lin2024SparseTSF} & 13 & 3 & 4 & ETTm1, Weather & ETTh1, ETTm2 & ETTh2\\
+TimeMixer~\cite{Wang2024TimeMixer} & 18 & 2 & 0 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & -- & --\\
+FITS~\cite{Xu2024FITS} & 11 & 4 & 5 & ETTh1, ETTm1, Weather & ETTm2 & ETTh2\\
+iTransformer~\cite{Liu2024iTransformer} & 20 & 0 & 0 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & -- & --\\
+PatchTST~\cite{Nie2023PatchTST} & 10 & 7 & 3 & ETTh1, Weather & ETTm1, ETTm2 & ETTh2\\
+TimesNet~\cite{Wu2023TimesNet} & 19 & 1 & 0 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & -- & --\\
+FEDformer~\cite{Zhou2022FEDformer} & 20 & 0 & 0 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & -- & --\\
+Autoformer~\cite{Wu2021Autoformer} & 20 & 0 & 0 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & -- & --\\
+Informer~\cite{Zhou2021Informer} & 20 & 0 & 0 & ETTh1, ETTh2, ETTm1, ETTm2, Weather & -- & --\\
+\bottomrule
+\end{tabular}}

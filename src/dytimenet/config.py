@@ -7,6 +7,12 @@ from pathlib import Path
 
 import yaml
 
+DATASET_NAMES = ("ETTh1", "ETTh2", "ETTm1", "ETTm2", "Weather", "Electricity", "Traffic", "Load", "Exchange",
+                 "Tetouan", "Panama", "PJM")
+MODEL_NAMES = ("dytimenet", "rlinear", "dlinear", "timebase", "sparsetsf", "dytimebase",
+               "cyclenet", "cyclenet_mlp", "tqnet")
+CYCLE_MODELS = ("cyclenet", "cyclenet_mlp", "tqnet")   # cần pha chu kỳ (cycle_len > 0)
+
 
 @dataclass
 class ExperimentConfig:
@@ -38,17 +44,34 @@ class ExperimentConfig:
     target_cols: list[str] | None = None
     num_workers: int = 0
     device: str = "auto"
+    cross_residual: str = "double"
+    model: str = "dytimenet"
+    cycle_len: int = 0   # > 0: thay MovingAvg bằng RCF (CycleNet) với chu kỳ dài cycle_len bước
+    period: int = 24     # độ dài đoạn P của TimeBase/SparseTSF
+    basis_num: int = 6   # số basis R của TimeBase
+    mix_lr: float = 0.0  # > 0: lr riêng cho nhánh trộn kênh của DyTimeBase (lr dùng cho backbone)
+    period_norm: bool = False  # TimeBase/DyTimeBase: trừ mean theo pha (use_period_norm của code chính thức)
+    individual: bool = False   # TimeBase/DyTimeBase: Linear basis/forecast riêng từng kênh
+    orth_weight: float = 0.0   # trọng số loss trực giao trên basis (TimeBase)
+    lr_schedule: str = "cosine"   # cosine (mặc định) hoặc type3 (lịch của TimeBase/SparseTSF)
+    grad_clip: float = 1.0     # chuẩn tối đa của gradient; 0 = không clip
+    use_cross: bool = True     # DyTimeBase: tắt CrossVBlock (chỉ để ablation)
+    use_intra: bool = True     # DyTimeBase: tắt IntraVBlock (chỉ để ablation)
+    inst_std: bool = False     # TimeBase/DyTimeBase: chia thêm cho std của cửa sổ (như RevIN không affine)
+    mix_detach: bool = False   # DyTimeBase: chặn gradient từ nhánh trộn kênh về backbone qua đầu vào E
+    init_from: str = ""        # best.pt để nạp trọng số trước khi train (huấn luyện hai giai đoạn)
+    freeze_backbone: bool = False  # DyTimeBase: đóng băng backbone, chỉ train nhánh trộn kênh (cần init_from)
 
     def validate(self):
         """Reject invalid settings before reading data or creating a checkpoint."""
-        if self.dataset not in ("ETTh1", "ETTh2", "ETTm1", "ETTm2", "Weather"):
-            raise ValueError("dataset must be ETTh1, ETTh2, ETTm1, ETTm2, or Weather")
+        if self.dataset not in DATASET_NAMES:
+            raise ValueError(f"dataset must be one of: {', '.join(DATASET_NAMES)}")
         for name in ("seq_len", "pred_len", "d_model", "num_layers", "batch_size",
-                     "epochs", "patience", "decomp_kernel"):
+                     "epochs", "patience", "decomp_kernel", "period", "basis_num"):
             value = getattr(self, name)
             if type(value) is not int or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
-        for name in ("warmup_epochs", "num_workers", "seed"):
+        for name in ("warmup_epochs", "num_workers", "seed", "cycle_len"):
             value = getattr(self, name)
             if type(value) is not int or value < 0:
                 raise ValueError(f"{name} must be a non-negative integer")
@@ -70,12 +93,33 @@ class ExperimentConfig:
             raise ValueError("lr must be positive; weight_decay and min_delta cannot be negative")
         if self.ffn_ratio <= 0 or int(self.d_model * self.ffn_ratio) < 1 or self.hidden_ratio <= 0:
             raise ValueError("ffn_ratio and hidden_ratio must produce positive hidden dimensions")
-        for name in ("scale", "affine_revin"):
+        for name in ("scale", "affine_revin", "period_norm", "individual", "use_cross", "use_intra",
+                     "inst_std", "mix_detach", "freeze_backbone"):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f"{name} must be a boolean")
         for name in ("data_path", "save_dir"):
             if not isinstance(getattr(self, name), str) or not getattr(self, name).strip():
                 raise ValueError(f"{name} must be a non-empty path string")
+        if self.model not in MODEL_NAMES:
+            raise ValueError(f"model must be one of: {', '.join(MODEL_NAMES)}")
+        if self.model in CYCLE_MODELS and self.cycle_len == 0:
+            raise ValueError(f"{self.model} needs cycle_len > 0")
+        if self.model == "dytimebase" and self.cycle_len:
+            raise ValueError("dytimebase does not use RCF (cycle_len must be 0)")
+        if self.model == "tqnet" and self.seq_len % 4:
+            raise ValueError("tqnet needs seq_len divisible by 4 (4 attention heads)")
+        for name in ("mix_lr", "orth_weight", "grad_clip"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be a non-negative number")
+        if not isinstance(self.init_from, str):
+            raise ValueError("init_from must be a path string ('' = không nạp)")
+        if self.freeze_backbone and (self.model != "dytimebase" or not self.init_from or not self.mix_lr):
+            raise ValueError("freeze_backbone needs model dytimebase, init_from and mix_lr > 0")
+        if self.lr_schedule not in ("cosine", "type3"):
+            raise ValueError("lr_schedule must be cosine or type3")
+        if self.cross_residual not in ("double", "single", "norm"):
+            raise ValueError("cross_residual must be double, single, or norm")
         if self.device not in ("auto", "cpu", "cuda"):
             raise ValueError("device must be auto, cpu, or cuda")
         if self.target_cols is not None:
@@ -88,7 +132,16 @@ class ExperimentConfig:
     def model_kwargs(self, num_vars):
         """All constructor arguments needed to rebuild the exact architecture."""
         names = ("seq_len", "pred_len", "d_model", "num_layers", "p1", "p2",
-                 "ffn_ratio", "hidden_ratio", "dropout", "affine_revin", "decomp_kernel")
+                 "ffn_ratio", "hidden_ratio", "dropout", "affine_revin", "decomp_kernel",
+                 "cross_residual", "cycle_len")
+        if self.model in ("timebase", "sparsetsf", "dytimebase"):
+            names += ("period", "basis_num", "period_norm", "individual")
+        if self.model in ("timebase", "dytimebase") and self.inst_std:
+            names += ("inst_std",)
+        if self.model == "dytimebase":
+            names += ("use_cross", "use_intra")
+            if self.mix_detach:
+                names += ("mix_detach",)
         return {"num_vars": num_vars, **{name: getattr(self, name) for name in names}}
 
     def to_dict(self):
@@ -125,6 +178,14 @@ def training_parser():
         value = getattr(defaults, name)
         if name == "target_cols":
             parser.add_argument("--target_cols", nargs="+", default=None)
+        elif name == "model":
+            parser.add_argument("--model", choices=MODEL_NAMES, default=None)
+        elif name == "lr_schedule":
+            parser.add_argument("--lr_schedule", choices=("cosine", "type3"), default=None)
+        elif name == "init_from":
+            parser.add_argument("--init_from", default=None)
+        elif name == "cross_residual":
+            parser.add_argument("--cross_residual", choices=("double", "single", "norm"), default=None)
         elif isinstance(value, bool):
             parser.add_argument(f"--{name}", action=argparse.BooleanOptionalAction, default=None)
         else:

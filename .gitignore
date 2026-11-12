@@ -3,6 +3,9 @@
 !/data/README.md
 /checkpoints/
 /local/
+/logs/
+# Dữ liệu phụ tải Hà Nội (EVN) không công khai
+/configs/*.csv
 /runs/
 /outputs/
 *.pt
@@ -30,3 +33,18 @@ dist/
 Thumbs.db
 .idea/
 .vscode/
+
+# LaTeX (file phụ khi biên dịch trong VS Code)
+*.aux
+*.synctex.gz
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+*.nav
+*.snm
+*.vrb

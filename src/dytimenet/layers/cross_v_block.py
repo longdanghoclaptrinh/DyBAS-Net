@@ -34,10 +34,15 @@ class DropFusionLinear(nn.Module):
 
 
 class CrossVBlock(nn.Module):
-    """Cross-Variable Block với DropFusion (học phụ thuộc giữa các biến)."""
+    """Cross-Variable Block với DropFusion (học phụ thuộc giữa các biến).
+
+    residual_from_norm=False: trả f(LN(x)) + x; True: trả f(LN(x)) + LN(x) (eq. 2.14 / eq. 25 paper).
+    """
     def __init__(self, num_vars: int, d_model: int,
-                 p1: float = 0.5, p2: float = 0.5, hidden_ratio: float = 0.75):
+                 p1: float = 0.5, p2: float = 0.5, hidden_ratio: float = 0.75,
+                 residual_from_norm: bool = False):
         super().__init__()
+        self.residual_from_norm = residual_from_norm
         c_hidden = max(1, int(num_vars * hidden_ratio))
         self.norm = nn.LayerNorm(d_model)
         self.df_linear1 = DropFusionLinear(num_vars, c_hidden, p1=p1, p2=p2)
@@ -48,6 +53,8 @@ class CrossVBlock(nn.Module):
         """x : [B, C, D] → [B, C, D]"""
         residual = x
         x = self.norm(x)
+        if self.residual_from_norm:
+            residual = x
         x = x.transpose(1, 2)      # [B, D, C]
         x = self.df_linear1(x)
         x = self.activation(x)

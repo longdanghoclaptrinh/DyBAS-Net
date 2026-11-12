@@ -1,0 +1,23 @@
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrr}
+\toprule
+Mô hình & Params & MACs & Epoch Time (s) & Infer Time (ms) & So với DyBAS-Net\\
+\midrule
+TimeBase & 0.40K & 2.77M & 24 & 1.01 & 0.62$\times$\\
+\textbf{DyBAS-Net} & 190.51K & 23.81M & 40 & 1.63 & 1.00$\times$\\
+SparseTSF & 0.93K & 12.71M & 54 & 2.39 & 1.46$\times$\\
+CycleNet/Linear & 573.05K & 166.41M & 74 & 6.71 & 4.11$\times$\\
+FITS & 133.64K & 42.73M & 81 & 7.48 & 4.58$\times$\\
+CycleNet/MLP & 792.44K & 236.67M & 92 & 7.93 & 4.86$\times$\\
+TQNet & 3.39M & 1.22G & 309 & 25.04 & 15.35$\times$\\
+GTR & 1.84M & 582.93M & 435 & 28.37 & 17.39$\times$\\
+iTransformer & 5.47M & 2.10G & 747 & 47.30 & 28.99$\times$\\
+Informer & 12.45M & 7.91G & 2\,819 & 176.13 & 107.96$\times$\\
+Autoformer & 12.14M & 8.97G & 5\,579 & 257.63 & 157.91$\times$\\
+FEDformer & 18.44M & 8.99G & 5\,080 & 301.83 & 185.01$\times$\\
+TimeMixer & 5.58M & 29.97G & 25\,557 & 812.01 & 497.73$\times$\\
+PatchTST & 8.69M & 16.08G & 76\,888 & 928.74 & 569.27$\times$\\
+MS-FLOW & 17.55M & 44.47G & 71\,191 & 2\,099.54 & 1\,286.92$\times$\\
+TimesNet & 151.32M & 1081.75G & 147\,660 & 13\,700.21 & 8\,397.57$\times$\\
+\bottomrule
+\end{tabular}}

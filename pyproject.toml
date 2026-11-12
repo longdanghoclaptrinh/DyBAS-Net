@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "dytimenet"
 version = "0.1.0"
-description = "DyTimeNet v2 multivariate forecasting, refactored from the project notebook"
+description = "DyBAS-Net: dynamic cross-variable dependency on basis segments for long-term forecasting"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

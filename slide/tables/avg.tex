@@ -1,0 +1,26 @@
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccccccc}
+\toprule
+\multirow{2}{*}{Mô hình} & \multicolumn{2}{c}{ETTh1} & \multicolumn{2}{c}{ETTh2} & \multicolumn{2}{c}{ETTm1} & \multicolumn{2}{c}{ETTm2} & \multicolumn{2}{c}{Weather}\\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}
+ & MSE & MAE & MSE & MAE & MSE & MAE & MSE & MAE & MSE & MAE\\
+\midrule
+\textbf{DyBAS-Net} & \textcolor[HTML]{0000FF}{0.407{\tiny$\pm$0.002}} & \textcolor[HTML]{0000FF}{0.420{\tiny$\pm$0.001}} & 0.356{\tiny$\pm$0.007} & 0.404{\tiny$\pm$0.006} & \textcolor[HTML]{FF0000}{\textbf{0.354{\tiny$\pm$0.003}}} & \textcolor[HTML]{FF0000}{\textbf{0.381{\tiny$\pm$0.003}}} & \textcolor[HTML]{0000FF}{0.252{\tiny$\pm$0.003}} & \textcolor[HTML]{0000FF}{0.315{\tiny$\pm$0.003}} & \textcolor[HTML]{FF0000}{\textbf{0.218{\tiny$\pm$0.000}}} & 0.266{\tiny$\pm$0.001}\\
+TimeBase & 0.411{\tiny$\pm$0.003} & \textcolor[HTML]{0000FF}{0.420{\tiny$\pm$0.002}} & 0.363{\tiny$\pm$0.003} & 0.410{\tiny$\pm$0.006} & 0.367{\tiny$\pm$0.007} & 0.391{\tiny$\pm$0.005} & 0.254{\tiny$\pm$0.003} & 0.317{\tiny$\pm$0.003} & 0.219{\tiny$\pm$0.000} & 0.265{\tiny$\pm$0.000}\\
+MS-FLOW & 0.455{\tiny$\pm$0.013} & 0.458{\tiny$\pm$0.007} & 0.363{\tiny$\pm$0.004} & 0.401{\tiny$\pm$0.003} & 0.384{\tiny$\pm$0.010} & 0.399{\tiny$\pm$0.005} & 0.279{\tiny$\pm$0.005} & 0.329{\tiny$\pm$0.002} & 0.231{\tiny$\pm$0.001} & \textcolor[HTML]{FF0000}{\textbf{0.260{\tiny$\pm$0.001}}}\\
+CycleNet/Linear & 0.434{\tiny$\pm$0.002} & 0.443{\tiny$\pm$0.002} & 0.346{\tiny$\pm$0.001} & 0.394{\tiny$\pm$0.001} & \textcolor[HTML]{0000FF}{0.358{\tiny$\pm$0.004}} & \textcolor[HTML]{0000FF}{0.383{\tiny$\pm$0.003}} & \textcolor[HTML]{FF0000}{\textbf{0.249{\tiny$\pm$0.001}}} & \textcolor[HTML]{FF0000}{\textbf{0.312{\tiny$\pm$0.001}}} & 0.237{\tiny$\pm$0.000} & 0.277{\tiny$\pm$0.000}\\
+CycleNet/MLP & 0.440{\tiny$\pm$0.006} & 0.452{\tiny$\pm$0.005} & 0.365{\tiny$\pm$0.000} & 0.405{\tiny$\pm$0.000} & 0.364{\tiny$\pm$0.000} & 0.391{\tiny$\pm$0.000} & 0.262{\tiny$\pm$0.001} & 0.325{\tiny$\pm$0.001} & 0.226{\tiny$\pm$0.001} & 0.268{\tiny$\pm$0.001}\\
+TQNet & 0.434{\tiny$\pm$0.001} & 0.446{\tiny$\pm$0.001} & 0.359{\tiny$\pm$0.003} & 0.401{\tiny$\pm$0.001} & \textcolor[HTML]{0000FF}{0.359{\tiny$\pm$0.003}} & 0.387{\tiny$\pm$0.002} & 0.264{\tiny$\pm$0.002} & 0.322{\tiny$\pm$0.001} & 0.236{\tiny$\pm$0.004} & 0.275{\tiny$\pm$0.003}\\
+GTR & 0.433{\tiny$\pm$0.003} & 0.445{\tiny$\pm$0.002} & 0.358{\tiny$\pm$0.001} & 0.401{\tiny$\pm$0.001} & \textcolor[HTML]{0000FF}{0.358{\tiny$\pm$0.005}} & \textcolor[HTML]{0000FF}{0.385{\tiny$\pm$0.002}} & 0.262{\tiny$\pm$0.001} & 0.324{\tiny$\pm$0.000} & 0.228{\tiny$\pm$0.001} & 0.269{\tiny$\pm$0.001}\\
+\midrule
+SparseTSF~\cite{Lin2024SparseTSF} & \textcolor[HTML]{FF0000}{\textbf{0.407}} & \textcolor[HTML]{FF0000}{\textbf{0.419}} & 0.344 & 0.387 & 0.362 & \textcolor[HTML]{0000FF}{0.384} & 0.253 & 0.317 & 0.244 & 0.285\\
+TimeMixer~\cite{Wang2024TimeMixer} & 0.454 & 0.474 & 0.379 & 0.426 & 0.381 & 0.414 & 0.283 & 0.347 & 0.238 & 0.281\\
+FITS~\cite{Xu2024FITS} & 0.417 & 0.430 & \textcolor[HTML]{FF0000}{\textbf{0.334}} & \textcolor[HTML]{FF0000}{\textbf{0.382}} & 0.359 & \textcolor[HTML]{0000FF}{0.382} & 0.252 & 0.314 & 0.244 & 0.286\\
+iTransformer~\cite{Liu2024iTransformer} & 0.454 & 0.467 & 0.392 & 0.422 & 0.370 & 0.401 & 0.278 & 0.338 & 0.233 & 0.273\\
+PatchTST~\cite{Nie2023PatchTST} & 0.420 & 0.440 & 0.344 & 0.391 & \textcolor[HTML]{0000FF}{0.355} & 0.385 & 0.251 & 0.319 & 0.224 & 0.264\\
+TimesNet~\cite{Wu2023TimesNet} & 0.505 & 0.499 & 0.433 & 0.455 & 0.408 & 0.425 & 0.299 & 0.353 & 0.254 & 0.293\\
+FEDformer~\cite{Zhou2022FEDformer} & 0.523 & 0.523 & 0.429 & 0.470 & 0.439 & 0.466 & 0.409 & 0.462 & 0.355 & 0.391\\
+Autoformer~\cite{Wu2021Autoformer} & 0.727 & 0.641 & 1.086 & 0.801 & 0.564 & 0.522 & 0.431 & 0.463 & 0.446 & 0.457\\
+Informer~\cite{Zhou2021Informer} & 1.445 & 0.929 & 5.486 & 1.891 & 1.138 & 0.818 & 3.594 & 1.473 & 0.567 & 0.513\\
+\bottomrule
+\end{tabular}}

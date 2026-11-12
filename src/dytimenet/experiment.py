@@ -19,7 +19,7 @@ from .config import config_from_dict
 from .data.dataset import TimeSeriesDataset, get_dataloaders
 from .engine.evaluate import evaluate, print_summary
 from .engine.trainer import EarlyStopping, cosine_lr, run_epoch
-from .models import DyTimeNet
+from .models import build_model
 from .utils.seed import set_seed
 
 
@@ -55,9 +55,20 @@ def train(config):
     # 2. Đọc CSV, tạo các tập dữ liệu và khởi tạo model.
     train_loader, val_loader, test_loader, num_vars = get_dataloaders(
         config.data_path, config.seq_len, config.pred_len, config.batch_size,
-        config.num_workers, config.target_cols, config.scale, dataset_name=config.dataset)
-    model = DyTimeNet(**config.model_kwargs(num_vars)).to(device)
-    print(f"DyTimeNet v2 | {config.dataset} | L={config.seq_len} S={config.pred_len} | "
+        config.num_workers, config.target_cols, config.scale, dataset_name=config.dataset,
+        cycle_len=config.cycle_len, device=device)
+    model = build_model(config.model, **config.model_kwargs(num_vars)).to(device)
+    if config.init_from:   # giai đoạn 2: nạp backbone đã train (vd. TimeBase cùng horizon, cùng seed)
+        state = torch.load(config.init_from, map_location="cpu", weights_only=True)
+        missing, unexpected = model.load_state_dict(state.get("model_state_dict", state), strict=False)
+        mix_names = {n for n, _ in model.named_parameters() if n.split(".")[0] in ("embed", "cross", "intra", "out")}
+        if unexpected or set(missing) - mix_names:
+            raise ValueError(f"init_from does not match the backbone: missing={missing}, unexpected={unexpected}")
+    if config.freeze_backbone:
+        mix_ids = {id(p) for p in model.mix_parameters()}
+        for p in model.parameters():
+            p.requires_grad_(id(p) in mix_ids)
+    print(f"{config.model} | {config.dataset} | L={config.seq_len} S={config.pred_len} | "
           f"device={device} | parameters={model.count_parameters():,}")
     # 3. Tạo thư mục riêng và lưu thông tin để tái lập lần chạy.
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -83,13 +94,23 @@ def train(config):
     # 4. Chuẩn bị loss, optimizer và bộ chọn checkpoint theo validation loss.
     early = EarlyStopping(config.patience, config.min_delta, checkpoint_path, metadata)
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
+    groups = model.parameters()
+    if config.mix_lr and hasattr(model, "mix_parameters"):
+        mix = model.mix_parameters()
+        mix_ids = {id(p) for p in mix}
+        groups = [{"params": [p for p in model.parameters() if id(p) not in mix_ids], "base_lr": config.lr},
+                  {"params": mix, "base_lr": config.mix_lr}]
+        if config.freeze_backbone:
+            groups = groups[1:]
+    optimizer = optim.Adam(groups, lr=config.lr, weight_decay=config.weight_decay)
     history = []
     start = time.perf_counter()
+    if config.init_from:   # epoch 0 = backbone đã nạp: early stopping giữ nó nếu nhánh trộn kênh không giúp val
+        early(run_epoch(model, val_loader, criterion, device=device)["loss"], model, 0)
     # 5. Mỗi epoch: cập nhật LR → train → validation → lưu checkpoint nếu cải thiện.
     for epoch in range(config.epochs):
-        lr = cosine_lr(optimizer, epoch, config.lr, config.epochs, config.warmup_epochs)
-        train_m = run_epoch(model, train_loader, criterion, optimizer, device)
+        lr = cosine_lr(optimizer, epoch, config.lr, config.epochs, config.warmup_epochs, config.lr_schedule)
+        train_m = run_epoch(model, train_loader, criterion, optimizer, device, config.orth_weight, config.grad_clip)
         val_m = run_epoch(model, val_loader, criterion, device=device)
         history.append({"epoch": epoch + 1, "lr": lr,
                         **{f"train_{k}": v for k, v in train_m.items()},
@@ -136,12 +157,12 @@ def evaluate_checkpoint(checkpoint_path, data_path=None, batch_size=None, device
     dataset = TimeSeriesDataset(
         config.data_path, config.seq_len, config.pred_len, "test", config.target_cols, config.scale,
         dataset_name=config.dataset, scaler_state=checkpoint["scaler"],
-        expected_columns=checkpoint["feature_columns"])
+        expected_columns=checkpoint["feature_columns"], cycle_len=config.cycle_len)
     if list(dataset.split_counts) != checkpoint["split_counts"]:
         raise ValueError("Dataset split counts differ from the checkpoint")
     loader = DataLoader(dataset, batch_size=config.batch_size, num_workers=config.num_workers,
                         shuffle=False, drop_last=False)
-    model = DyTimeNet(**checkpoint["model_kwargs"]).to(resolved)
+    model = build_model(config.model, **checkpoint["model_kwargs"]).to(resolved)
     model.load_state_dict(checkpoint["model_state_dict"])
     summary = print_summary(config, evaluate(model, loader, resolved))
     summary.update(checkpoint=str(checkpoint_path), best_epoch=checkpoint["best_epoch"],

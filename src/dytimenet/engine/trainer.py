@@ -44,35 +44,47 @@ class EarlyStopping:
         return model
 
 
-def cosine_lr(optimizer, epoch, lr_init, total_epochs, warmup_epochs=2):
-    """Zero-based warmup followed by the original cosine schedule."""
-    if epoch < warmup_epochs:
+def cosine_lr(optimizer, epoch, lr_init, total_epochs, warmup_epochs=2, kind="cosine"):
+    """Zero-based warmup followed by the original cosine schedule.
+
+    kind="type3": lịch của TimeBase/SparseTSF (lradj type3) — giữ lr 4 epoch đầu (epoch 0–3), sau đó nhân 0.8 mỗi epoch.
+    """
+    if kind == "type3":
+        lr = lr_init if epoch < 4 else lr_init * 0.8 ** (epoch - 3)
+    elif epoch < warmup_epochs:
         lr = lr_init * (epoch + 1) / warmup_epochs
     else:
         progress = (epoch - warmup_epochs) / max(1, total_epochs - warmup_epochs)
         lr = lr_init * 0.5 * (1 + math.cos(math.pi * progress))
-    for pg in optimizer.param_groups:
-        pg["lr"] = lr
+    for pg in optimizer.param_groups:   # nhóm có base_lr riêng giữ nguyên tỉ lệ so với lr_init
+        pg["lr"] = lr * pg.get("base_lr", lr_init) / lr_init
     return lr
 
 
-def run_epoch(model, loader, criterion, optimizer=None, device="cpu"):
-    """Train/evaluate with sample-weighted MSE/MAE and gradient norm clipping at 1."""
+def run_epoch(model, loader, criterion, optimizer=None, device="cpu", aux_weight=0.0, grad_clip=1.0):
+    """Train/evaluate with sample-weighted MSE/MAE and gradient norm clipping (grad_clip; 0 = tắt).
+
+    aux_weight > 0: cộng aux_weight · model.aux_loss (vd. loss trực giao của TimeBase) vào loss khi train;
+    loss báo cáo vẫn là MSE.
+    """
     is_train = optimizer is not None
     model.train(is_train)
     total_loss = total_mse = total_mae = 0.0
     n = 0
     with torch.set_grad_enabled(is_train):
-        for bx, by in loader:
+        for batch in loader:
+            bx, by, *extra = batch      # extra = [pha chu kỳ] khi dùng RCF
             bx, by = bx.to(device), by.to(device)
-            out = model(bx)
+            out = model(bx, *[e.to(device) for e in extra])
             loss = criterion(out, by)
             if not torch.isfinite(loss):
                 raise ValueError("Non-finite loss encountered; check data and hyperparameters")
             if is_train:
                 optimizer.zero_grad()
-                loss.backward()
-                nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                aux = getattr(model, "aux_loss", None)
+                (loss + aux_weight * aux if aux_weight and aux is not None else loss).backward()
+                if grad_clip:
+                    nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
                 optimizer.step()
             bs = bx.size(0)
             total_loss += loss.item() * bs

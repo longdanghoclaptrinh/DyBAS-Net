@@ -1,0 +1,7 @@
+# Phụ tải toàn quốc Panama + thời tiết 3 thành phố (theo giờ, 13 biến, 2015-01 → 2020-06); chia 70/10/20 như Weather.
+dataset: Panama
+data_path: data/panama.csv
+d_model: 64
+batch_size: 64
+p1: 0.2
+p2: 0.1
